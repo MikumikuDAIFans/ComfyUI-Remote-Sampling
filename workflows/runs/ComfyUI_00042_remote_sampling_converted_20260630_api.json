@@ -1,0 +1,131 @@
+{
+  "8": {
+    "inputs": {
+      "samples": [
+        "19",
+        0
+      ],
+      "vae": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "11": {
+    "inputs": {
+      "text": "allastella,1girl,alternate color,alternate hairstyle,bare shoulders,bow,covered mouth,covering own mouth,detached sleeves,eyelashes,eyeliner,hair between eyes,hair rings,hand over own mouth,hand up,limited palette,long hair,looking at viewer,makeup,nail polish,number tattoo,quad tails,red background,red bow,red theme,shoulder tattoo,sidelocks,simple background,sleeves past wrists,solo,square,tattoo,updo,upper body,dark \nlarge breasts, curvy, \n\nmasterpiece, best quality, score_7, @sola7764, @banpai akira, [@yoneyama mai, @mika pikazo, (@quasarcake:0.8), :(@onono imoko:0.6), @rei \\(sanbonzakura\\), (@cogecha:0.8), :12]",
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "worst quality, low quality, score_1, score_2, score_3, artist name,\n\nThis image suffers from low resolution and poor quality, appearing pixelated, blurry, and full of compression or jpeg artifacts. \n\nThe scene is cluttered with many small figures, heads, or people in the background that look like chibi characters, dolls, or fumo dolls, surrounding the subject with a large collection of plush toys. \n\nThe artwork looks like a fake anime or game screenshot with noise, errors, and scan lines, resembling something unfinished sketch with a simple, abstract, or monochrome background.\n\nThe anatomy is incorrect, featuring bad proportions, bad perspective, and ugly, deformed body parts such as bad hands, bad feet, fused or missing fingers, extra limbs, and twisted or flexible deformities. The image contains four fingers, six fingers, four toes, six toes.\n\nThis image contains many of the artist's signatures around the edges, and contains many watermarks, signatures, logos, or censorship bars like mosaics, and has an low-score AI-generated error.\n\nThe character in this image has a white area above the eyes, a white forehead, and many lines on the eyelids.\n\nDraw by @Alexander Groznov, @Andrew Wyeth, @Boris Vallejo, @Entei Ryu, @Manara Milo, @Marco Turini, @Norman Rockwell, @Paulina Sadowska, @Syd Mead, @Syd Mills, @THORES Shibamoto, @chinese anime style, @renwan.",
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "15": {
+    "inputs": {
+      "vae_name": "qwen_image_vae_2.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "19": {
+    "inputs": {
+      "seed": 664928445236589,
+      "steps": 30,
+      "cfg": 5.2,
+      "sampler_name": "seeds_2",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "positive": [
+        "11",
+        0
+      ],
+      "negative": [
+        "12",
+        0
+      ],
+      "latent_image": [
+        "114",
+        0
+      ],
+      "remote_profile": "anima_qwen_aella_xcn",
+      "project_root": "F:\\TieguoDun\\Remote_comfyui",
+      "python_executable": "C:\\Python314\\python.exe",
+      "timeout_sec": 2400,
+      "sampler_id": "real00042_19"
+    },
+    "class_type": "Remote_Sampling_local",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "45": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "110": {
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "预览图像"
+    }
+  },
+  "113": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "114": {
+    "inputs": {
+      "width": 1216,
+      "height": 1920,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  }
+}

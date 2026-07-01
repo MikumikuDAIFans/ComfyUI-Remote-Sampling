@@ -1,0 +1,29 @@
+{
+  "name": "anima_qwen_aella_xcn",
+  "description": "Anima v1.0 base with qwen text encoder, Aella character LoRA, and xcn style LoRA.",
+  "unet": {
+    "class_type": "UNETLoader",
+    "unet_name": "anima-base-v1.0.safetensors",
+    "weight_dtype": "default"
+  },
+  "clip": {
+    "class_type": "CLIPLoader",
+    "clip_name": "qwen_3_06b_base.safetensors",
+    "type": "stable_diffusion",
+    "device": "default"
+  },
+  "loras": [
+    {
+      "class_type": "LoraLoader",
+      "lora_name": "Anima/角色/AellaStella_v1_anima_char-000018-2c97.safetensors",
+      "strength_model": 1.1,
+      "strength_clip": 1.1
+    },
+    {
+      "class_type": "LoraLoader",
+      "lora_name": "Anima/画风/xcn_ogpt_v1a.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "2": {
+    "inputs": {
+      "vae_name": "qwen_image_vae_2.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "3": {
+    "inputs": {
+      "samples": [
+        "500",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "4": {
+    "inputs": {
+      "filename_prefix": "remote_sampling_node/converted_fixed30_20260701",
+      "images": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "11": {
+    "inputs": {
+      "text": "allastella,1girl,adjusting clothes, adjusting headwear, arm up, border, breasts, choker, covered navel, forehead, nipple, heart, highleg, highleg one-piece swimsuit, jacket, looking at viewer, official alternate costume, one-piece swimsuit, open clothes, open jacket, orange-tinted eyewear, outline, parted lips, purple background, red choker, sidelocks, simple background, small breasts, solo, star \\(symbol\\), sunglasses, swimsuit, tinted eyewear, visor cap, white border, white one-piece swimsuit, white outline, yellow halo, yellow jacket, masterpiece, best quality, amazing quality, highres, absurdres, newest, very aesthetic, extreme aesthetic, sensitive, very awa, incredibly absurdres, 8K, ultra detailed, HDR, high contrast, high detail RAW color art,\n\nmasterpiece, best quality, score_7, @sola7764, @banpai akira,",
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "worst quality, low quality, score_1, score_2, score_3, artist name,\n\nThis image suffers from low resolution and poor quality, appearing pixelated, blurry, and full of compression or jpeg artifacts. \n\nThe scene is cluttered with many small figures, heads, or people in the background that look like chibi characters, dolls, or fumo dolls, surrounding the subject with a large collection of plush toys. \n\nThe artwork looks like a fake anime or game screenshot with noise, errors, and scan lines, resembling something unfinished sketch with a simple, abstract, or monochrome background.\n\nThe anatomy is incorrect, featuring bad proportions, bad perspective, and ugly, deformed body parts such as bad hands, bad feet, fused or missing fingers, extra limbs, and twisted or flexible deformities. The image contains four fingers, six fingers, four toes, six toes.\n\nThis image contains many of the artist's signatures around the edges, and contains many watermarks, signatures, logos, or censorship bars like mosaics, and has an low-score AI-generated error.\n\nThe character in this image has a white area above the eyes, a white forehead, and many lines on the eyelids.\n\nDraw by @Alexander Groznov, @Andrew Wyeth, @Boris Vallejo, @Entei Ryu, @Manara Milo, @Marco Turini, @Norman Rockwell, @Paulina Sadowska, @Syd Mead, @Syd Mills, @THORES Shibamoto, @chinese anime style, @renwan.",
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "45": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "114": {
+    "inputs": {
+      "width": 1024,
+      "height": 1960,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "500": {
+    "inputs": {
+      "seed": 49172819928165,
+      "steps": 30,
+      "cfg": 5.2,
+      "sampler_name": "seeds_2",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "remote_profile": "anima_qwen_aella_xcn",
+      "project_root": "F:\\TieguoDun\\Remote_comfyui",
+      "python_executable": "C:\\Python314\\python.exe",
+      "timeout_sec": 2400,
+      "sampler_id": "converted_fixed30_500",
+      "positive": [
+        "11",
+        0
+      ],
+      "negative": [
+        "12",
+        0
+      ],
+      "latent_image": [
+        "114",
+        0
+      ]
+    },
+    "class_type": "Remote_Sampling_local",
+    "_meta": {
+      "title": "Remote Sampling Local"
+    }
+  }
+}

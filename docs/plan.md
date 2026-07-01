@@ -1,0 +1,571 @@
+# Remote ComfyUI Latent-First 本地解码任务书
+
+## 计划元数据
+- Plan ID: `remote-comfyui-latent-local-decode`
+- Version: `v1`
+- Last updated: `2026-06-30 10:11 +08:00`
+- Canonical progress file: `F:\TieguoDun\Remote_comfyui\plan.md`
+- Related handoff file: `none`
+- Current branch: `not applicable`
+- Current active phase: `Phase 5: 本地 GPU VAE 解码器`
+- Execution readiness: `executing`
+
+## 目标
+在公司远程 Linux 服务器上部署可复现的 ComfyUI 推理环境，让服务器主要承担 SDXL 动漫系工作流的模型加载、CLIP 编码和采样计算；远程 workflow 截止在 latent 输出，不在远程执行 `VAEDecode`、`PreviewImage`、`SaveImage` 或图片保存。对于图生图，输入图片也不上传远端：本地先执行 `LoadImage -> VAEEncode -> SaveLatent` 得到 clean latent，再把 input latent 上传远端执行 `LoadLatent -> KSampler(denoise < 1) -> SaveLatent`，最后 latent 通过本地可控通道回到本机，本机使用 NVIDIA GPU 和匹配 VAE/解码器生成最终图片、保存结果和维护工作流资产。
+
+最终形态优先追求简单、可调试、可逐步落地：先用普通 Linux 进程/独立 Python 环境跑通远端 ComfyUI 和复杂 custom nodes，再把稳定环境 Docker 化作为后续封装目标。
+
+## 范围与约束
+- In scope:
+  - 在 `/home/user02/remote_ComfyUI` 下建立远端 ComfyUI 项目区。
+  - 以普通进程方式部署 ComfyUI 基线环境，优先使用独立 conda/venv，不污染系统 Python。
+  - 迁移并验证本地工作流所需的 base model、LoRA、VAE、custom nodes 和配置。
+  - 建立 SSH/Paramiko 双跳隧道访问远程 WebUI，远程 ComfyUI 仅监听 `127.0.0.1`。
+  - 将目标 SDXL 动漫系 workflow 改造成远程 latent 输出，本地 GPU VAE 解码。
+  - 图生图采用本地 VAEEncode 输入图片、远端只接收 clean latent 的方案 A。
+  - 记录每阶段验证证据，后续可更新本任务书进度台账。
+- Out of scope:
+  - 第一版不实现完整本地前端、桌面 App 或复杂图库系统。
+  - 第一版不适配 FLUX、SD3、视频生成或非 SDXL latent/AE 体系。
+  - 第一版不承诺强对抗隐私；远程拿到 clean latent 和对应 VAE 理论上仍可还原输入或输出图片的近似内容。
+  - 第一版不把所有模型打进 Docker 镜像。
+- Constraints:
+  - 远程服务器所有项目文件默认只放在 `/home/user02` 下；除环境只读检查外，不修改 `/etc`、`/usr`、`/var`、`/opt`、`/root` 或其他用户目录。
+  - 任何需要 `sudo apt install`、Docker daemon 配置、系统服务修改或端口对外开放的动作，都必须单独确认后再做。
+  - 远程服务必须默认只监听服务器本机地址，并通过 SSH 转发访问。
+  - 本地系统 Python 是 `3.14.3`，不作为 ComfyUI/解码脚本默认运行时；本地解码环境应单独使用 Python `3.11` 或 `3.12`。
+  - 远程为 `aarch64 + NVIDIA GB10 + CUDA 13.0`，PyTorch/依赖选择必须先验证可用 wheel 或 conda 包。
+
+## 执行阶段
+
+### Phase 1: 环境基线与目录准备
+- Purpose: 确认远程服务器是否满足后续部署条件，并建立唯一项目根目录。
+- Outputs:
+  - 远程环境摘要。
+  - 项目目录 `/home/user02/remote_ComfyUI`。
+  - 当前任务书更新为 canonical progress file。
+- Completion criteria:
+  - 能通过 `company-lab` 跳板连接 `user02@10.10.11.97`。
+  - 远程工作目录确认在 `/home/user02`。
+  - `/home/user02/remote_ComfyUI` 存在且归属 `user02:user02`。
+- Validation:
+  - 运行远程检查命令并确认 `whoami`、`hostname`、`pwd`、OS、GPU、Python、Docker、磁盘空间。
+  - `ls -ld /home/user02/remote_ComfyUI` 显示目录存在。
+- Evidence:
+  - 已确认 `user02@fusionxparkgb10-40ea`，Ubuntu `24.04.4 LTS`，`aarch64`，NVIDIA `GB10`，Driver `580.142`，CUDA `13.0`，Python `3.12.3`，Docker `29.2.1`。
+  - 已确认根分区约 `3.6T`，可用约 `2.6T`。
+  - 已创建 `/home/user02/remote_ComfyUI`。
+
+### Phase 2: 远端 ComfyUI 普通进程基线部署
+- Purpose: 先用最透明、最容易排错的方式跑通官方 ComfyUI 基线，避免 Docker 先期叠加架构、GPU runtime 和 custom node 依赖问题。
+- Outputs:
+  - `/home/user02/remote_ComfyUI/ComfyUI` 源码目录。
+  - 独立 Python 环境，例如 `/home/user02/remote_ComfyUI/.venv` 或 conda env。
+  - 基线启动脚本和日志目录。
+  - 官方 ComfyUI WebUI 可经 SSH 隧道访问。
+- Completion criteria:
+  - ComfyUI 能在远程启动并只监听 `127.0.0.1:8188`。
+  - 本地通过 SSH `-L` 打开 `http://127.0.0.1:8188` 能看到远程 WebUI。
+  - 基线环境中 PyTorch 能识别 NVIDIA GPU。
+- Validation:
+  - `python main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch` 正常启动。
+  - `ss -lntp | grep 8188` 显示 `127.0.0.1:8188`，不能是 `0.0.0.0:8188`。
+  - 在远端 Python 环境中执行 `import torch; print(torch.cuda.is_available())` 并记录结果。
+- Evidence:
+  - 已创建远端目录骨架：`ComfyUI`、`models/*`、`workflows`、`latents`、`outputs`、`logs`、`scripts`、`docker`、`custom_nodes_manifest`。
+  - 官方 `git clone` 和 `git clone --depth 1` 在跳板链路上卡在 pack/index 阶段；已改用 GitHub codeload tarball 获取源码，源码目录为 `/home/user02/remote_ComfyUI/ComfyUI`。
+  - ComfyUI 源码版本文件显示 `ComfyUI version: 0.26.0`，源码目录存在 `requirements.txt`。
+  - 系统 Python 触发 Ubuntu PEP 668 `externally-managed-environment`，已确认不能用系统 pip 安装项目包。
+  - 已创建正式环境 `/home/user02/remote_ComfyUI/.venv`，Python `3.12.3`，pip `26.1.2`。
+  - 已从 `https://download.pytorch.org/whl/cu130` 安装并验证 `torch 2.12.1+cu130`、`torchvision 0.27.1+cu130`、`torchaudio 2.11.0+cu130`。
+  - 远端 `.venv` 中 `torch.cuda.is_available()` 为 `True`，设备名为 `NVIDIA GB10`，`torch.version.cuda` 为 `13.0`。
+  - 已安装 `ComfyUI/requirements.txt`，import smoke check 通过。
+  - 已短启动 ComfyUI，监听检查显示 `127.0.0.1:8188`，不是 `0.0.0.0:8188`；启动后已停止进程。
+  - 启动日志：`/home/user02/remote_ComfyUI/logs/comfy_startup_smoke_20260629_145505.log`。
+  - 已在 tmux 会话 `remote_comfyui` 中启动远端 ComfyUI，远端进程 PID `1126895`，仍只监听 `127.0.0.1:8188`。
+  - 已新增本地 helper `F:\TieguoDun\Remote_comfyui\tools\comfy_paramiko_tunnel.py`，复用 company-lab 连接脚本，不在本仓库保存密码。
+  - 本地端口 `127.0.0.1:18188` 由 helper 转发到远端 `127.0.0.1:8188`，本地进程 PID `112052`。
+  - HTTP 探测 `http://127.0.0.1:18188/` 返回 `STATUS=200`，内容包含 ComfyUI 前端 HTML。
+
+### Phase 3: 模型与 custom nodes 迁移验证
+- Purpose: 让远端 ComfyUI 复现本地已有复杂工作流所需节点和模型依赖。
+- Outputs:
+  - 远端模型目录结构。
+  - `extra_model_paths.yaml` 或等价模型路径配置。
+  - custom node 清单、安装方式、版本或 commit 记录。
+  - 本地工作流在远端能加载且缺失节点为零。
+- Completion criteria:
+  - base model、LoRA、VAE、ControlNet/IPAdapter 等实际用到的模型目录均可被远端 ComfyUI 识别。
+  - 打开目标 workflow 时没有 missing custom nodes。
+  - 至少一个原始 SDXL 动漫系 workflow 可在远端队列中执行到标准图片输出，用于证明环境完整；该验证图片可使用临时 fallback 输出，验证后清理。
+- Validation:
+  - ComfyUI WebUI 加载目标 workflow，不出现红色缺失节点。
+  - `/object_info` 或 WebUI 节点列表能看到目标 custom nodes。
+  - 运行一张低分辨率 smoke test，并记录所用 checkpoint、LoRA、VAE、seed、尺寸和日志。
+- Evidence:
+  - 已上传目标 workflow：`/home/user02/remote_ComfyUI/workflows/AnimaBase.json`，大小 `17136` bytes。
+  - 已确认目标 workflow 的最小模型依赖：
+    - `anima-base-v1.0.safetensors`
+    - `qwen_3_06b_base.safetensors`
+    - `qwen_image_vae_2.safetensors`
+    - `xcn_ogpt_v1a.safetensors`
+    - `AellaStella_v1_anima_char-000018-2c97.safetensors`
+  - 本机经 SSH/SFTP 上传大文件到公司网络极慢；1 小时 Paramiko SFTP 仅上传约 `243MB`，后续 `scp`/legacy `scp -O`/跳板机 staging 测试也只有 KB/s 到十几 KB/s 量级，不适合传输 100MB+ LoRA 或 4GB+ base model。
+  - 已改用远端服务器直接从 Hugging Face 镜像 `hf-mirror.com/circlestone-labs/Anima` 下载三大基础文件。原始 `huggingface.co` 在远端 30-60 秒无响应，镜像可用。
+  - 已完成远端基础模型下载并确认大小；初始下载位置为 `/home/user02/remote_ComfyUI/models`，后续资源整理已归位到 ComfyUI 标准模型目录：
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/diffusion_models/anima-base-v1.0.safetensors`，`4182218328` bytes。
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/diffusion_models/anima-base-v1.0.metadata.json`，`645` bytes。
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/clip/qwen_3_06b_base.safetensors`，`1192135096` bytes。
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/vae/qwen_image_vae_2.safetensors`，`253806246` bytes。
+  - 下载日志：`/home/user02/remote_ComfyUI/logs/download_anima_models_20260629.log`。其中 base model 平均约 `81MiB/s`，text encoder 和 VAE 平均约 `27MiB/s`。
+  - 已新增远端下载脚本：`/home/user02/remote_ComfyUI/scripts/download_anima_models_mirror.sh`。
+  - 已新增本地流式上传尝试工具：`F:\TieguoDun\Remote_comfyui\tools\upload_to_company_server_stream.py`。它支持 `.uploading` 续传，但实测仍受本机到公司网络上行瓶颈限制。
+  - 已在 CPU 模式启动远端 ComfyUI 并调用 `/object_info` 验证 required nodes 均可见：
+    - `UNETLoader`
+    - `CLIPLoader`
+    - `VAELoader`
+    - `Lora Loader (LoraManager)`
+    - `WeiLinPromptUIWithoutLora`
+  - 已在 CPU 模式验证三大基础模型在 ComfyUI 模型列表中可见：
+    - `anima-base-v1.0.safetensors`
+    - `qwen_3_06b_base.safetensors`
+    - `qwen_image_vae_2.safetensors`
+  - 验证日志：`/home/user02/remote_ComfyUI/logs/phase3_model_visibility_20260629.log`。
+  - LoRA 迁移已完成。为绕过慢速逐文件传输，先在本地打包压缩为 `F:\TieguoDun\Remote_comfyui\transfer\anima_loras_role_bluearchive.tar.xz`，大小 `152599696` bytes，再通过 `upload_to_company_server.py` 上传到远端 `/home/user02/remote_ComfyUI/transfer/anima_loras_role_bluearchive.tar.xz` 并解包。
+  - 已按类型分类放置 LoRA 到远端 ComfyUI 本体模型目录：
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/loras/Anima/角色/AellaStella_v1_anima_char-000018-2c97.safetensors`，`91887144` bytes。
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/loras/Anima/角色/AellaStella_v1_anima_char-000018-2c97.jpeg`，`18120` bytes。
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/loras/Anima/角色/AellaStella_v1_anima_char-000018-2c97.metadata.json`，`9077` bytes。
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/loras/Anima/画风/BlueArchiveStyleB1.safetensors`，`137731072` bytes。
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/loras/Anima/画风/BlueArchiveStyleB1.jpeg`，`22412` bytes。
+    - `/home/user02/remote_ComfyUI/ComfyUI/models/loras/Anima/画风/BlueArchiveStyleB1.metadata.json`，`13654` bytes。
+  - 已完成本地与远端 SHA256 校验：
+    - `AellaStella_v1_anima_char-000018-2c97.safetensors`: `2c97267acb0387503039640fba8035623073825c89bfc28286dbf4920c16b581`
+    - `BlueArchiveStyleB1.safetensors`: `05eaec899cf03412dea811f9e7820e898056774f8e65fb24e64fed79d99875e7`
+    - `BlueArchiveStyleB1.jpeg`: `9287ebd2b60fcef9d4a4721b3985461b128057f59c85f159a72b37de88334259`
+    - `BlueArchiveStyleB1.metadata.json`: `b8e979496aa9d4be40bc2bc7545f700a05dc7beddc45d03fc46c6e5ab04525bd`
+  - 已在远端 CPU 模式 `/object_info` 验证 LoRA 可见：
+    - `AellaStella_v1_anima_char-000018-2c97.safetensors`
+    - `BlueArchiveStyleB1.safetensors`
+  - 已在远端 GPU 模式启动验证 ComfyUI，设备为 `cuda:0 NVIDIA GB10 : cudaMallocAsync`，目标 nodes、base model、text encoder、VAE、两份 LoRA 均可见。
+  - GPU 启动验证日志：`/home/user02/remote_ComfyUI/logs/phase3_gpu_startup_20260629.log`。
+  - 已完成远端资源归位整理：
+    - 基础模型从 `/home/user02/remote_ComfyUI/models` 移入 `/home/user02/remote_ComfyUI/ComfyUI/models`。
+    - LoRA 已保持在 `/home/user02/remote_ComfyUI/ComfyUI/models/loras/Anima/...`。
+    - 空的根目录 `/home/user02/remote_ComfyUI/models`、`latents`、`outputs` 已清理。
+    - `/home/user02/remote_ComfyUI/ComfyUI/extra_model_paths.yaml` 已禁用为 `/home/user02/remote_ComfyUI/ComfyUI/extra_model_paths.yaml.disabled_20260630_112112`；ComfyUI 现在直接使用本体 `ComfyUI/models`。
+    - 传输包、下载包和探针环境已归档到 `/home/user02/remote_ComfyUI/archive/20260630_resource_reorg`，未直接删除。
+    - 整理前后 SHA256 校验一致；日志：
+      - `/home/user02/remote_ComfyUI/logs/resource_reorg_20260630_112030.log`
+      - `/home/user02/remote_ComfyUI/logs/resource_reorg_20260630_112112_move.log`
+      - `/home/user02/remote_ComfyUI/logs/resource_reorg_20260630_112148_archive.log`
+    - 整理后临时启动 ComfyUI 验证 `/object_info`，确认 base、CLIP、VAE、三份 LoRA、`SaveLatent`、`LoraLoader` 均可见。
+    - 整理后 reduced latent-only 回归测试成功，输出 `/home/user02/remote_ComfyUI/ComfyUI/output/latents/resource_reorg_verify_00042_00001_.latent`，size `397448` bytes，SHA256 `fa0fe7347a4dbff31e053f776ed59beef9e2e1e22cd9e2e3165058d0036ac3e1`，且未生成远端图片文件。
+
+### Phase 4: Latent 输出通道与远程无解码 workflow
+- Purpose: 将远端职责从“生成图片”收敛到“生成 latent”，避免远端自然流程产生 RGB 图片、预览图或保存图。
+- Outputs:
+  - 本地 latent 接收目录，例如 `D:\ComfyRemote\latents`。
+  - 远端 latent 输出挂载点或传输路径，例如 `/home/user02/remote_ComfyUI/latents`.
+  - SDXL 动漫系 latent-first workflow：`KSampler -> SaveLatent`，不包含 `VAEDecode`、`PreviewImage`、`SaveImage`。
+  - 远端启动参数关闭或尽量限制预览与不必要输出。
+- Completion criteria:
+  - 远端执行目标 workflow 后只产生 latent 文件，不产生最终 PNG/JPG。
+  - latent 文件能回到本地可控目录。
+  - workflow 检查确认没有远端解码节点和图片保存节点。
+- Validation:
+  - 对 workflow JSON/API workflow 搜索 `VAEDecode`、`PreviewImage`、`SaveImage`，目标远程生成版本中不得存在。
+  - 运行一次低分辨率 latent smoke test，本地目录收到 latent 文件。
+  - 远端 output/temp/fallback 目录检查未新增最终图片文件。
+- Evidence:
+  - 已生成远端 latent-first frontend workflow：`/home/user02/remote_ComfyUI/workflows/AnimaBase_remote_bluearchive_latent.json`。
+  - 该 workflow 已删除远端 `VAELoader`、`VAEDecode`、`PreviewImage`、`SaveImage`，新增 `SaveLatent`，并将画风 LoRA 替换为 `BlueArchiveStyleB1`。
+  - 已生成远端 API smoke prompt：`/home/user02/remote_ComfyUI/workflows/AnimaBase_remote_smoke_api.json`。
+  - 已完成低成本远端 GPU latent smoke test：
+    - 尺寸：`512x320`
+    - steps: `4`
+    - sampler: `euler`
+    - scheduler: `simple`
+    - seed: `20260630`
+    - base: `anima-base-v1.0.safetensors`
+    - text encoder: `qwen_3_06b_base.safetensors`
+    - LoRA: `Anima/角色/AellaStella_v1_anima_char-000018-2c97.safetensors`，model strength `1.10`
+    - LoRA: `Anima/画风/BlueArchiveStyleB1.safetensors`，model strength `1.00`
+  - 远端只产生 latent 文件，没有产生 PNG/JPG 图片文件：
+    - `/home/user02/remote_ComfyUI/ComfyUI/output/latents/remote_smoke_20260630_00001_.latent`
+    - size: `165728` bytes
+    - SHA256: `b2a029750951846676399f9178ea7ae7322672c739d3445be4de5894aa0abdfd`
+  - 远端执行日志：`/home/user02/remote_ComfyUI/logs/latent_smoke_20260630.log`。
+  - 远端 prompt history 结果：`/home/user02/remote_ComfyUI/logs/latent_smoke_20260630_result.json`。
+  - 已新增本地下载 helper：`F:\TieguoDun\Remote_comfyui\tools\download_from_company_server.py`。
+  - 已拉取 latent 到本地：`F:\TieguoDun\Remote_comfyui\latents\remote_smoke_20260630_00001_.latent`，size `165728` bytes，SHA256 `B2A029750951846676399F9178EA7AE7322672C739D3445BE4DE5894AA0ABDFD`。
+  - 已从本地图片 `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\ComfyUI_00042_.png` 提取嵌入 workflow，并生成真实工作流 latent-only 版本：
+    - 本地 UI workflow: `F:\TieguoDun\Remote_comfyui\workflows\ComfyUI_00042_latent_only_workflow.json`
+    - 本地 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\ComfyUI_00042_latent_only_api.json`
+    - 远端 UI workflow: `/home/user02/remote_ComfyUI/workflows/ComfyUI_00042_latent_only_workflow.json`
+    - 远端 API prompt: `/home/user02/remote_ComfyUI/workflows/ComfyUI_00042_latent_only_api.json`
+  - 该真实 workflow 已移除远端 `VAELoader`、`VAEDecode`、`PreviewImage`、`SaveImage`，只保留 `SaveLatent` 作为输出节点。
+  - 该真实 workflow 的 LoRA 加载已从 `Lora Loader (LoraManager)` 改为核心 `LoraLoader` 串联，原因是 LoRA Manager API 在远端会把 LoRA 名称解析成裸文件名并触发 `FileNotFoundError`；核心 `LoraLoader` 可显式使用分类路径：
+    - `Anima/角色/AellaStella_v1_anima_char-000018-2c97.safetensors`，model/clip strength `1.10`
+    - `Anima/画风/xcn_ogpt_v1a.safetensors`，model/clip strength `1.00`
+  - 已完成真实工作流 reduced latent test：
+    - 临时尺寸：`512x768`
+    - 临时 steps: `4`
+    - 输出：`/home/user02/remote_ComfyUI/ComfyUI/output/latents/ComfyUI_00042_reduced_latent_core_00001_.latent`
+    - size: `397456` bytes
+  - 已完成真实工作流正式尺寸 latent test：
+    - 尺寸：`1216x1920`
+    - steps: `30`
+    - sampler: `seeds_2`
+    - scheduler: `simple`
+    - cfg: `5.2`
+    - seed: `664928445236589`
+    - 输出：`/home/user02/remote_ComfyUI/ComfyUI/output/latents/ComfyUI_00042_latent_00001_.latent`
+    - size: `2338952` bytes
+    - SHA256: `3f087469b24f9e695426daa94c4b3ba4eee757ecddd7a9109df04ae9645b0c4e`
+    - 已确认远端没有生成匹配 `ComfyUI_00042` 的 PNG/JPG/JPEG/WEBP 图片文件。
+
+### Phase 5: 本地 GPU VAE 解码器
+- Purpose: 在本机完成最终成像和保存，把图片资产留在本地。
+- Outputs:
+  - 本地 Python `3.11/3.12` 解码环境。
+  - 本地 SDXL VAE/解码器路径配置。
+  - 解码脚本或 CLI，例如 `decode_sdxl_latent --latent <file> --vae <vae_path> --out-dir <dir> --metadata <json>`。
+  - 本地输出目录和 sidecar metadata。
+- Completion criteria:
+  - 本地 RTX 4060 Ti 能加载 SDXL VAE 并解码远端返回的 latent。
+  - 输出 PNG/JPG 存在于本地 `D:\ComfyRemote\outputs`。
+  - 输出分辨率、seed、prompt、checkpoint、LoRA、VAE 和 latent 源文件可追踪。
+- Validation:
+  - `nvidia-smi` 显示本地 RTX 4060 Ti 可用。
+  - 解码一份远端 latent，输出图片可打开且尺寸正确。
+  - sidecar JSON 与图片同名或可关联。
+- Evidence:
+  - 本地已确认 RTX 4060 Ti 16GB，Driver `591.86`，CUDA runtime reported `13.1`。
+  - 已确认本地 ComfyUI API `http://127.0.0.1:8188` 可用。
+  - 已将远端 latent 放入本地 ComfyUI input：
+    - `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\input\remote_smoke_20260630_00001_.latent`
+  - 已用本地 ComfyUI 执行 `LoadLatent -> VAELoader(qwen_image_vae_2.safetensors) -> VAEDecode -> SaveImage`。
+  - 本地解码输出成功：
+    - `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_decode\remote_smoke_20260630_00001_.png`
+    - size: `280331` bytes。
+  - 已将真实工作流远端 latent 拉回本地：
+    - `F:\TieguoDun\Remote_comfyui\latents\ComfyUI_00042_latent_00001_.latent`
+    - size: `2338952` bytes。
+  - 已将真实工作流 latent 放入本地 ComfyUI input：
+    - `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\input\ComfyUI_00042_latent_00001_.latent`
+  - 已生成本地解码 API prompt：
+    - `F:\TieguoDun\Remote_comfyui\workflows\ComfyUI_00042_local_decode_api.json`
+  - 已用本地 ComfyUI 执行 `LoadLatent -> VAELoader(qwen_image_vae_2.safetensors) -> VAEDecode -> SaveImage` 解码真实工作流 latent。
+  - 本地解码输出成功：
+    - `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_decode\ComfyUI_00042_local_decode_00001_.png`
+    - size: `2567095` bytes。
+
+### Phase 6: Docker 固化与长期运行
+- Purpose: 在普通进程路径验证后，将稳定依赖封装为可复现部署形态，便于重建、迁移和长期运行。
+- Outputs:
+  - `/home/user02/remote_ComfyUI/docker/` 下的 Dockerfile/compose 草案。
+  - 容器镜像只包含 ComfyUI、Python/PyTorch、custom nodes 和依赖。
+  - 模型、workflow、latents、logs 通过宿主机 volume 挂载。
+  - Docker 运行说明和回滚到普通进程的方式。
+- Completion criteria:
+  - Docker 容器可访问 NVIDIA GB10。
+  - 容器内 ComfyUI 能加载同一套模型和 custom nodes。
+  - latent-first workflow 在 Docker 内与普通进程行为一致。
+- Validation:
+  - `docker run --gpus all ... nvidia-smi` 或等价验证通过。
+  - 容器内 smoke test 生成 latent，本地解码成功。
+  - 对比普通进程和 Docker 路径的关键版本、模型路径和输出行为。
+- Evidence:
+  - 待执行。
+
+## 决策记录
+- Verified facts:
+  - 本地已有 ComfyUI 且可正常工作。
+  - 远端服务器此前没有目标 ComfyUI 项目；已创建 `/home/user02/remote_ComfyUI`。
+  - 远端服务器是 `fusionxparkgb10-40ea`，Ubuntu `24.04.4 LTS`，`aarch64`，NVIDIA `GB10`，Driver `580.142`，CUDA `13.0`。
+  - 远端 Docker 可用，当前有 `ollama` 容器运行并占用约 `43137MiB` GPU 显存。
+  - Docker 已配置 `nvidia` runtime，但默认 runtime 是 `runc`。
+  - 远端 Python 为 `3.12.3`，pip 为 `24.0`，git 和 tmux 可用。
+  - 官方 ComfyUI 支持 Linux 手动安装/普通进程运行；Linux 无 Comfy Desktop 预编译包时应走 manual installation。
+  - 远端普通进程路径已验证可用：`.venv` 中 PyTorch CUDA 能识别 `NVIDIA GB10`，ComfyUI 可启动并只监听 `127.0.0.1:8188`。
+  - 本地可通过 `http://127.0.0.1:18188/` 访问远端 ComfyUI WebUI；本地 `127.0.0.1:8188` 已被本机 ComfyUI 占用，因此远端转发使用 `18188`。
+  - GitHub `git clone` 在当前跳板链路上不稳定；GitHub codeload tarball 下载可用。
+  - 当前 workspace `F:\TieguoDun\Remote_comfyui` 不是 git repository。
+- Active assumptions:
+  - 第一版目标模型按 SDXL 动漫系处理，例如 Animagine/NoobAI/Illustrious 一类 SDXL-compatible workflow。
+  - 本地最终图片解码优先使用 NVIDIA GPU，而不是 CPU。
+  - 远端 custom nodes 能在 `aarch64` 上安装或有可替代版本；这需要在 Phase 3 验证。
+  - latent 回传第一版优先使用简单文件通道；如果 SSHFS 在服务器侧缺失且不能安装，则改用 `scp/rsync` 拉取 latent 作为 fallback。
+- Locked decisions:
+  - 先普通进程部署 ComfyUI，再 Docker 固化；原因是 custom nodes 多、远端为 `aarch64 + GB10 + CUDA 13.0`，先减少排错层数。
+  - Docker 不作为第一阶段主路径；Docker 是稳定后的复现与封装工具。
+  - 远端最终 workflow 不执行 `VAEDecode`、`PreviewImage`、`SaveImage`；最终图片只在本地生成。
+  - 远程端口不公网暴露，默认只监听 `127.0.0.1`，通过 SSH 隧道访问。
+  - 所有项目文件优先放在 `/home/user02/remote_ComfyUI`。
+- Open questions:
+  - 运行 ComfyUI 前是否需要暂停或限制当前 `ollama` 容器，以释放约 43GB GPU 显存。
+  - 远端 PyTorch 在 `aarch64 + CUDA 13.0 + GB10` 上的最佳安装路径是 pip、conda 还是 NVIDIA/NGC 基础环境。
+  - 本地现有 ComfyUI 的 exact custom node 清单、commit、requirements 和模型目录尚未导出。
+  - 是否允许后续在远端安装 `sshfs` 或其他系统包；若不允许，latent 回传使用 `scp/rsync` fallback。
+
+## 关键制品与环境
+- Canonical docs:
+  - `F:\TieguoDun\Remote_comfyui\plan.md`: 当前唯一任务书和进度台账。
+  - `F:\TieguoDun\Remote_comfyui\remote_sampling_custom_node_plan.md`: 远程采样器 custom node 设计与执行任务书。
+- Important code or output artifacts:
+  - `/home/user02/remote_ComfyUI`: 远端项目根目录。
+  - `D:\ComfyRemote\workflows`: 建议的本地 workflow 归档目录。
+  - `D:\ComfyRemote\latents`: 建议的本地 latent 接收目录。
+  - `D:\ComfyRemote\outputs`: 建议的本地最终图片输出目录。
+  - `/home/user02/remote_ComfyUI/ComfyUI`: 远端 ComfyUI 源码目录，来自 GitHub codeload tarball。
+  - `/home/user02/remote_ComfyUI/.venv`: 远端普通进程 Python 环境。
+  - `/home/user02/remote_ComfyUI/ComfyUI/models`: 远端 ComfyUI 标准模型目录，当前 base、CLIP、VAE、LoRA 均已归位到此处。
+  - `/home/user02/remote_ComfyUI/ComfyUI/output`: 远端 ComfyUI 输出目录，当前只允许保存 latent；最终图片在本地生成。
+  - `/home/user02/remote_ComfyUI/logs`: 远端安装和启动日志目录。
+  - `/home/user02/remote_ComfyUI/docker`: 后续 Docker 固化目录。
+  - `/home/user02/remote_ComfyUI/archive/20260630_resource_reorg`: 资源整理归档目录，包含传输包、下载包、探针 custom nodes 和探针 venv。
+  - `F:\TieguoDun\Remote_comfyui\tools\comfy_paramiko_tunnel.py`: 本地双跳端口转发 helper。
+  - `F:\TieguoDun\Remote_comfyui\tools\upload_to_company_server.py`: 本地 Paramiko SFTP 上传 helper，支持 `.uploading` 续传和已完成文件跳过。
+  - `F:\TieguoDun\Remote_comfyui\tools\download_from_company_server.py`: 本地 Paramiko SFTP 下载 helper，用于从远端拉取 latent 等小文件。
+  - `F:\TieguoDun\Remote_comfyui\tools\upload_to_company_server_stream.py`: 本地 SSH stdin 流式上传 helper，支持 `.uploading` 续传；当前受本机到公司网络上行瓶颈限制。
+  - `F:\TieguoDun\Remote_comfyui\tools\run_remote_latent_local_decode.py`: 一键流水线脚本，负责启动/复用远端 ComfyUI、提交 latent-only prompt、下载 latent、调用本地 ComfyUI 解码、写入 metadata。
+  - `F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling`: 最小远程采样器 custom node 包，包含 `Remote_Sampling_local` 与 `Remote_Sampling_remote`。
+  - `F:\TieguoDun\Remote_comfyui\jobs`: custom node remote sampling job 本地目录。
+  - `F:\TieguoDun\Remote_comfyui\logs_local_tunnel_18188.txt`: 本地隧道 stdout 日志。
+  - `/home/user02/remote_ComfyUI/scripts/download_anima_models_mirror.sh`: 远端 Anima 基础模型镜像下载脚本。
+  - `/home/user02/remote_ComfyUI/scripts/remote_submit_prompt.py`: 由一键流水线脚本上传/更新的远端 prompt 提交 helper。
+  - `F:\TieguoDun\Remote_comfyui\runs`: 本地一键流水线 metadata 目录。
+- Required commands:
+  - `python C:\Users\25454\.codex\skills\company-lab-2-server\scripts\server_exec.py --cmd "<cmd>"`: 通过 company-lab 跳板执行远端命令。
+  - `python F:\TieguoDun\Remote_comfyui\tools\comfy_paramiko_tunnel.py --local-port 18188`: 本地访问远端 ComfyUI 的双跳隧道。
+  - `python F:\TieguoDun\Remote_comfyui\tools\run_remote_latent_local_decode.py`: 执行远端 latent 生成、下载、本地解码的一键主流程。
+  - `python F:\TieguoDun\Remote_comfyui\tools\run_remote_latent_local_decode.py --steps 4 --width 512 --height 768`: 低成本端到端 smoke test。
+  - `python F:\TieguoDun\Remote_comfyui\tools\run_remote_latent_local_decode.py --input-image "<local_image>" --denoise 0.55`: 图生图流程，本地编码输入图片为 latent，远端只接收 latent。
+  - `ss -lntp | grep 8188`: 验证远端 ComfyUI 监听地址。
+  - `nvidia-smi`: 验证远端/本地 GPU 状态。
+  - `python -c "import torch; print(torch.__version__, torch.cuda.is_available())"`: 验证 Python 环境和 GPU 可用性。
+- Environment baseline:
+  - Local: Windows，workspace `F:\TieguoDun\Remote_comfyui`，本地 GPU RTX 4060 Ti 16GB，系统 Python `3.14.3` 不作为项目运行时。
+  - Remote: `/home/user02` 工作边界，Ubuntu `24.04.4 LTS`，`aarch64`，NVIDIA `GB10`，CUDA `13.0`，Python `3.12.3`，Docker `29.2.1`。
+  - Security: 远端项目默认不开放公网端口，不在 `/home/user02` 之外写项目文件。
+
+## 进度台账
+- Overall progress: 已完成 Phase 1-4 的基础闭环；Phase 5 已完成 smoke test、真实工作流本地解码验证、远端资源归位整理和一键流水线脚本。当前已经证明“远端执行真实尺寸/真实 prompt 工作流并只保存 latent、本地拉取 latent、本地解码 PNG”可行，且远端模型资源已集中到 `ComfyUI/models`。下一步是把脚本使用方式固化为长期运行约定，并补齐更完整的 metadata/批处理能力。
+- Phase 1: done
+- Phase 2: done
+- Phase 3: done
+- Phase 4: done
+- Phase 5: in progress
+- Phase 6: pending
+- Validation status:
+  - 已验证远端身份、OS、架构、GPU、Docker、Python、磁盘空间和项目目录。
+  - 已验证官方 ComfyUI 存在 Linux 手动安装/普通进程运行路径。
+  - 已验证远端 PyTorch GPU 可用性：`torch 2.12.1+cu130`，CUDA `13.0`，设备 `NVIDIA GB10`。
+  - 已验证远端 ComfyUI 可普通进程启动并只监听 `127.0.0.1:8188`。
+  - 已验证本地 SSH/Paramiko 双跳隧道访问远端 WebUI。
+  - 已验证目标 workflow 所需 custom nodes 在远端 `/object_info` 中可见。
+  - 已验证 `UNETLoader`、`CLIPLoader`、`VAELoader` 能看到目标 base/text encoder/VAE 文件。
+  - 已完成 LoRA 上传验证、GPU 启动验证、远端 latent-only smoke test、本地 latent 拉取和本地 ComfyUI 解码验证。
+  - 已完成从真实 PNG 嵌入 workflow 提取、latent-only 改写、上传远端、reduced 测试、正式尺寸测试和本地最终解码验证。
+  - 已完成远端资源归位：base/CLIP/VAE/LoRA 均在 `/home/user02/remote_ComfyUI/ComfyUI/models`，远端 latent 输出在 `/home/user02/remote_ComfyUI/ComfyUI/output/latents`，根目录空的 `models/latents/outputs` 已清理。
+  - 已禁用 `extra_model_paths.yaml` 并验证 ComfyUI 不依赖额外模型路径仍能识别目标模型；整理后 reduced latent-only 回归测试通过。
+  - 已新增一键流水线脚本 `F:\TieguoDun\Remote_comfyui\tools\run_remote_latent_local_decode.py`，默认文生图流程为：
+    - 通过 company-lab 跳板连接远端服务器。
+    - 若远端 ComfyUI 未监听指定端口，则以普通进程启动并只监听 `127.0.0.1`。
+    - 将本地 latent-only API prompt 复制为带 run id 的远端临时 prompt，并改写 `SaveLatent.filename_prefix`。
+    - 提交远端 prompt 并轮询 history，提取 `.latent` 输出路径。
+    - 通过 SFTP 下载 latent 到本地 `latents/`。
+    - 复制 latent 到本地 ComfyUI `input/`，调用本地 `LoadLatent -> VAELoader -> VAEDecode -> SaveImage`。
+    - 写入本地 `runs/<run_id>.json` metadata，记录远端 prompt、latent、本地输出、SHA256 和执行状态。
+  - 该脚本已扩展支持图生图方案 A：
+    - 参数：`--input-image "<local_image>" --denoise <0..1>`。
+    - 本地执行 `LoadImage -> VAELoader(qwen_image_vae_2.safetensors) -> VAEEncode -> SaveLatent`。
+    - 只上传本地编码出的 `.latent` 到远端 `/home/user02/remote_ComfyUI/ComfyUI/input/<run_id>_input.latent`。
+    - 远端 prompt 自动把 `EmptyLatentImage` 替换为 `LoadLatent`，并设置 `KSampler.denoise`。
+    - 远端图生图 prompt 不包含 `LoadImage`、`VAEEncode`、`VAELoader`、`VAEDecode`、`PreviewImage`、`SaveImage`。
+    - 下载远端输出 latent 后，仍在本地执行最终 `VAEDecode -> SaveImage`。
+  - 一键流水线 reduced smoke test 已通过：
+    - command: `python tools\run_remote_latent_local_decode.py --run-id script_smoke_20260630_1145 --steps 4 --width 512 --height 768`
+    - 远端临时 prompt: `/home/user02/remote_ComfyUI/workflows/runs/script_smoke_20260630_1145_latent_api.json`
+    - 远端 latent: `/home/user02/remote_ComfyUI/ComfyUI/output/latents/script_smoke_20260630_1145_00001_.latent`
+    - 本地 latent: `F:\TieguoDun\Remote_comfyui\latents\script_smoke_20260630_1145_00001_.latent`
+    - latent SHA256: `f8f7332fb529629af6c125f274021501d842df145edf61c6656c4ccf49053d99`
+    - 本地图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_decode\script_smoke_20260630_1145_00001_.png`
+    - 本地图片 SHA256: `1284efa72d7e4c2e58c7e4913ae76826606d6e30a4dfd53c2a40e23e057c9ab4`
+    - metadata: `F:\TieguoDun\Remote_comfyui\runs\script_smoke_20260630_1145.json`
+    - 脚本默认会停止由自身启动的远端 ComfyUI；验证后 `8197` 端口无残留监听。
+  - 一键流水线正式参数测试已通过：
+    - command: `python tools\run_remote_latent_local_decode.py --run-id script_full_20260630_1159`
+    - 参数：使用 `ComfyUI_00042_latent_only_api.json` 原始设置，`1216x1920`，`30 steps`，seed `664928445236589`。
+    - 远端临时 prompt: `/home/user02/remote_ComfyUI/workflows/runs/script_full_20260630_1159_latent_api.json`
+    - 远端 latent: `/home/user02/remote_ComfyUI/ComfyUI/output/latents/script_full_20260630_1159_00001_.latent`
+    - 本地 latent: `F:\TieguoDun\Remote_comfyui\latents\script_full_20260630_1159_00001_.latent`
+    - latent SHA256: `d05199129a27a13fb15e1acb89fa803fc58705d4579d80b9ba9e3b6bf8403861`
+    - 本地图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_decode\script_full_20260630_1159_00001_.png`
+    - 本地图片 SHA256: `674e320cfdb1958d9a6f88b56bb4e25e612105c04a75aa1691f6f62426d82836`
+    - metadata: `F:\TieguoDun\Remote_comfyui\runs\script_full_20260630_1159.json`
+    - 验证后 `8197` 端口无残留监听。
+  - 一键流水线图生图 reduced smoke test 已通过：
+    - command: `python tools\run_remote_latent_local_decode.py --run-id img2img_smoke_20260630_1215 --input-image "F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_decode\script_smoke_20260630_1145_00001_.png" --steps 4 --denoise 0.55`
+    - 本地输入图片 SHA256: `1284efa72d7e4c2e58c7e4913ae76826606d6e30a4dfd53c2a40e23e057c9ab4`
+    - 本地 input latent: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\encoded_inputs\img2img_smoke_20260630_1215_input_00001_.latent`
+    - 本地/远端 input latent SHA256: `7fd5a3683f9d688b4bb4c78f2620c57019ac5fa86c4bbce716a0e9be0846a05f`
+    - 远端 input latent: `/home/user02/remote_ComfyUI/ComfyUI/input/img2img_smoke_20260630_1215_input.latent`
+    - 远端临时 prompt: `/home/user02/remote_ComfyUI/workflows/runs/img2img_smoke_20260630_1215_latent_api.json`
+    - 远端 output latent: `/home/user02/remote_ComfyUI/ComfyUI/output/latents/img2img_smoke_20260630_1215_00001_.latent`
+    - output latent SHA256: `dcff547b055794e1056fc1834eba4f048c9e8eba2e9a31ff65d7ee880eb2c6ae`
+    - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_decode\img2img_smoke_20260630_1215_00001_.png`
+    - 本地最终图片 SHA256: `d40b01680c23784edc7c8733b0daa78900482366965b745562282f224c3f59e3`
+    - metadata: `F:\TieguoDun\Remote_comfyui\runs\img2img_smoke_20260630_1215.json`
+    - 远端检查确认：无输入图片文件、无输出图片文件、prompt 禁止节点均不存在，验证后 `8197` 端口无残留监听。
+  - 已开始实现 Remote Sampling custom node 最小版：
+    - 文档：`F:\TieguoDun\Remote_comfyui\remote_sampling_custom_node_plan.md`
+    - 节点包：`F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling`
+    - 本地安装：`F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\custom_nodes\ComfyUI-Remote-Sampling`
+    - 远端安装：`/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling`
+    - 已实现 `Remote_Sampling_local`：保存 `job.json/inputs.pt`，调用 bridge，读取 `output.pt` 并返回 LATENT。
+    - 已实现 `Remote_Sampling_remote`：读取远端 job，调用 `nodes.common_ksampler`，写出 `output.pt/result.json`。
+    - 已实现 bridge：`ComfyUI-Remote-Sampling\tools\remote_sampling_job_cli.py`，内置 `anima_qwen_aella_xcn` profile。
+    - 最小端到端 smoke test 已通过：
+      - 本地测试 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_node_smoke_20260630_1500_local_api.json`
+      - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_145547_8a1884d8_smoke_002`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_145547_8a1884d8_smoke_002`
+    - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\smoke_20260630_1500_00001_.png`
+    - 远端未生成匹配该 job 的图片文件。
+    - 图生图 clean latent smoke test 已通过：
+      - 本地测试 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_node_img2img_20260630_1735_local_api.json`
+      - 本地输入图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\input\img2img_smoke_20260630_1215_input_image.png`
+      - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_173211_f7a66697_img2img_001`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_173211_f7a66697_img2img_001`
+      - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\img2img_20260630_1735_00001_.png`
+      - 远端 job 文件：`job.json`、`inputs.pt`、`output.pt`、`result.json`。
+    - 双 `Remote_Sampling_local` 顺序执行 smoke test 已通过：
+      - 本地测试 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_node_dual_20260630_1745_local_api.json`
+      - 第一个本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_173416_f6fce9a4_dual_a`
+      - 第二个本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_173505_6971ed02_dual_b`
+      - 第一个远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_173416_f6fce9a4_dual_a`
+      - 第二个远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_173505_6971ed02_dual_b`
+      - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\dual_20260630_1745_00001_.png`
+      - 两个远端 job 均只包含 `job.json`、`inputs.pt`、`output.pt`、`result.json`，远端输出目录未发现匹配图片文件。
+    - 已新增最小转换脚本 `F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py`：
+      - 将基础 `KSampler` 替换为 `Remote_Sampling_local`。
+      - 删除 `model` 输入，补齐 `remote_profile/project_root/python_executable/timeout_sec/sampler_id`。
+      - 默认剪掉不再被输出节点引用的本地模型加载节点。
+    - 最小自动转换 smoke test 已通过：
+      - 源 prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_converter_source_20260630_1755_api.json`
+      - 转换后 prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_converter_converted_20260630_1755_api.json`
+      - 转换节点：`500`
+      - 被剪掉的不可达本地模型节点：`44`
+      - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_174134_47ed7415_converted_500`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_174134_47ed7415_converted_500`
+      - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\converted_20260630_1755_00001_.png`
+    - 已外置 `anima_qwen_aella_xcn` profile：
+      - Profile file: `F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling\profiles\anima_qwen_aella_xcn.json`
+      - Bridge: `F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling\tools\remote_sampling_job_cli.py`
+      - 外置 profile 回归 smoke test 已通过：
+        - 本地 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_profile_config_20260630_1810_api.json`
+        - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_230047_c096b821_profile_config_500`
+        - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_230047_c096b821_profile_config_500`
+        - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\profile_config_20260630_1810_00001_.png`
+    - 已增强 remote sampling job metadata：
+      - `job.json` 增加 `profile` 摘要：profile 名称、包内相对 source、UNET、CLIP、LoRA 名称和 strength。
+      - `job.json` 增加 `remote` 摘要：远端 base、ComfyUI、job_dir、prompt、job_root。
+      - metadata 回归 smoke test 已通过：
+        - 本地 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_metadata_20260630_1818_api.json`
+        - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_230516_a4f0ee65_metadata_500`
+        - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_230516_a4f0ee65_metadata_500`
+        - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\metadata_20260630_1818_00001_.png`
+    - 转换脚本已支持 `--bypass-local-lora-clip`，可将 `CLIPTextEncode.clip` 从本地 LoRA loader 绕回上游 `CLIPLoader`，避免本地模型/LoRA loader 分支保持可达。
+    - 已完成真实提取 workflow 裁剪版自动转换和 reduced smoke：
+      - 输入 prompt: `F:\TieguoDun\Remote_comfyui\workflows\extracted_ComfyUI_00042\prompt.json`
+      - 转换后 prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\ComfyUI_00042_remote_sampling_converted_20260630_api.json`
+      - reduced smoke prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\ComfyUI_00042_remote_sampling_converted_reduced_20260630_1825_api.json`
+      - 转换节点：`19`
+      - rewired clip refs：`11: 115 -> 45`，`12: 115 -> 45`
+      - 被裁剪节点：`44`、`115`、`121`
+      - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_230936_9dd9e4fe_real00042_reduced_19`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_230936_9dd9e4fe_real00042_reduced_19`
+      - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\real00042_reduced_20260630_1825_00001_.png`
+      - 远端输出目录未发现匹配图片文件。
+    - 已新增远端 ComfyUI tmux 服务管理脚本：
+      - 管理脚本：`F:\TieguoDun\Remote_comfyui\tools\remote_comfy_service.py`
+      - tmux session：`remote-comfyui-8197`
+      - 监听地址：`127.0.0.1:8197`
+      - 已验证 `status -> start -> status -> logs -> stop -> status`。
+      - start 后 `/object_info` 返回 `819` 个节点，`Remote_Sampling_remote` 可见。
+      - stop 后 tmux 不在，`8197` 无监听。
+    - 本地常用 `8188` 已验证可直接使用 `Remote_Sampling_local`：
+      - `/object_info` 节点总数 `2190`，`Remote_Sampling_local` 可见。
+      - API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_g2_8188_smoke_20260701_api.json`
+      - 本地输出图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\g2_8188_smoke_20260701_00001_.png`
+    - 真实提取 workflow 完整尺寸已验证：
+      - API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\ComfyUI_00042_remote_sampling_converted_full_20260701_api.json`
+      - 参数：`1216x1920`、`30 steps`、seed `664928445236589`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260701_001457_4a139116_real00042_full_19`
+      - 本地输出图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\real00042_full_20260701_00001_.png`
+      - 远端 prompt class list 只有 `UNETLoader/CLIPLoader/LoraLoader/LoraLoader/Remote_Sampling_remote`，禁止图片节点为空。
+      - 远端输出目录未发现匹配图片文件。
+    - metadata 审计最终验证已通过：
+      - API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_g4_audit_final_20260701_api.json`
+      - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260701_002701_c638f4f7_g4_audit_final_500`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260701_002701_c638f4f7_g4_audit_final_500`
+      - `job.json.local.files` 记录 `inputs.pt/output.pt/result.json` 的 size/SHA256。
+      - `result.json.files.output.pt` 记录 output latent 的 size/SHA256。
+    - 已新增长期 goal、转换规则和使用说明：
+      - `F:\TieguoDun\Remote_comfyui\remote_sampling_completion_goal.md`
+      - `F:\TieguoDun\Remote_comfyui\remote_sampling_workflow_conversion_rules.md`
+      - `F:\TieguoDun\Remote_comfyui\remote_sampling_usage.md`
+    - 已完成 2026-07-01 画质异常排查与修复：
+      - 用户异常图：
+        - `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\converted_20260630_1755_00002_.png`
+        - `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\converted_20260630_1755_00003_.png`
+      - 根因 1：`remote_sampling_converter_converted_20260630_1755_api.json` 是 3-step smoke workflow，不应用于正式画质判断；用户实测图嵌入参数为 `1024x1960 / steps=3`，明显欠采样。
+      - 根因 2：旧转换器默认 `remote_profile=anima_qwen_aella_xcn`，会把无 LoRA 源 workflow 也强行映射到 Aella/xcn LoRA，污染对照测试。
+      - 修复 1：`tools\convert_ksampler_to_remote_sampling.py` 默认改为 `--remote-profile auto`，从原始 `KSampler.model` 和 `CLIPTextEncode.clip` 链自动生成远端 profile。
+      - 修复 2：新增 `ComfyUI-Remote-Sampling\profiles\anima_qwen_base.json`，并支持自动生成 profile 到 `ComfyUI-Remote-Sampling\profiles\generated`。
+      - 修复 3：`Remote_Sampling_local` 在 `job.json` 写入低步数/大尺寸质量警告，避免 smoke 参数被误当作正式质量参数。
+      - 验证：保持异常图 00003 的同提示词、同尺寸、同远端 profile，仅将 `steps` 从 `3` 提高到 `30`，输出恢复正常。
+      - 修正版 workflow: `F:\TieguoDun\Remote_comfyui\workflows\runs\converted_00003_fixed_steps30_20260701_api.json`
+      - 修正版输出: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\converted_fixed30_20260701_00001_.png`
+      - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260701_010530_824c66eb_converted_fixed30_500`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260701_010530_824c66eb_converted_fixed30_500`
+      - 远端 job 目录只包含 `job.json/inputs.pt/output.pt/result.json`，无 PNG/JPG/JPEG/WEBP。
+    - 已新增 Remote Sampling 监控与资源 preflight 长程任务审核稿：
+      - Task book: `F:\TieguoDun\Remote_comfyui\remote_sampling_monitoring_task_book.md`
+      - Goal prompt: `F:\TieguoDun\Remote_comfyui\remote_sampling_monitoring_goal_prompt.md`
+      - 当前状态：已执行完成
+      - 核心范围：`status.json/events.jsonl`、上传/下载速度、远端采样 step 进度、本地 ProgressBar、资源缺失 preflight、人类可执行报错、后续节点面板显示。
+    - 已完成 Remote Sampling 监控与资源 preflight 实现：
+      - `ComfyUI-Remote-Sampling\protocol.py`：新增 `status.json`、`events.jsonl`、`remote_sampling_report.txt` helper，支持 transfer/sampling metrics。
+      - `ComfyUI-Remote-Sampling\nodes\remote_sampling_local.py`：bridge 改为流式读取 `RS_PROGRESS`，使用 ComfyUI `ProgressBar` 更新本地进度；完成后通过 `ui.text` 返回 report，首个输出仍为 `LATENT`。
+      - `ComfyUI-Remote-Sampling\nodes\remote_sampling_remote.py`：远端采样改为 `comfy.sample.sample(..., callback=...)` 路径，逐 step 写入 `status.json.sampling`。
+      - `ComfyUI-Remote-Sampling\tools\remote_sampling_job_cli.py`：新增资源 preflight、上传/下载速度统计、远端 status 轮询、远端状态合并、本地 report 生成。
+      - Monitor smoke workflow: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_monitor_smoke_20260701_api.json`
+      - Monitor smoke job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260701_183734_ac924e97_monitor_smoke_500`
+      - Monitor smoke output: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\monitor_smoke_20260701_00001_.png`
+      - Monitor 20-step workflow: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_monitor_quality20_20260701_api.json`
+      - Monitor 20-step job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260701_184221_bdc900a2_monitor_quality20_500`
+      - Monitor 20-step output: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\monitor_quality20_20260701_00001_.png`
+      - 缺失资源 preflight 验证 profile: `F:\TieguoDun\Remote_comfyui\workflows\runs\missing_ascii_lora_preflight_profile.json`
+      - 缺失资源 preflight 验证 job: `F:\TieguoDun\Remote_comfyui\jobs\preflight_missing_ascii_lora_validation`
+      - 验证结果：`python -m py_compile` 通过；4-step smoke、20-step quality flow、缺失 LoRA preflight 均通过；远端相关 job 目录和远端 output 未发现 PNG/JPG/JPEG/WEBP。
+      - 同步状态：本地 8188 已重启并确认 `Remote_Sampling_local` 可见；远端节点包已同步；远端 8197 当前无常驻监听。
+    - 最终清理检查通过：
+      - 远端 `127.0.0.1:8197` 无监听。
+      - 关键远端 job 目录无 PNG/JPG/JPEG/WEBP。
+      - 远端 `ComfyUI/output` 未发现关键 job 的匹配图片文件。
+- Residual risks:
+  - `aarch64 + GB10 + CUDA 13.0` 的 PyTorch 主路径已验证，但部分 custom node 依赖仍可能不可用。
+  - 当前 `ollama` 容器占用大量 GPU 显存，但真实工作流 `1216x1920 x 30 steps` 已可完成；后续更大 batch、更大模型或并发运行仍可能受影响。
+  - 远端未确认 `sshfs` 可用；latent 文件回传可能需要 fallback。
+  - custom nodes 多，依赖冲突风险高；当前最小目标 workflow 所需两个 custom nodes 已通过 CPU 模式导入验证。
+  - 当前 ComfyUI 源码来自 tarball，不是 git working tree；后续升级需要重新下载 tarball 或重试 git clone。
+  - 本机到公司网络上传 100MB+ 文件仍然偏慢；压缩包 + Paramiko SFTP 续传是目前已验证可用的迁移方式。
+  - 当前正式 API prompt 使用核心 `LoraLoader`，不是前端 `Lora Loader (LoraManager)` 节点；这是已验证可运行路径。若后续坚持保留 LoRA Manager 前端节点，需要单独修复或绕过其 API 路径解析问题。
+  - 资源整理归档目录 `/home/user02/remote_ComfyUI/archive/20260630_resource_reorg` 仍占用约 `332M`；确认不再需要传输包和探针环境后可删除。
+  - 图生图方案 A 上传的是 clean latent；它避免远端看到原始输入图片文件，但不是强隐私方案。远端如获得匹配 VAE，理论上仍可从 clean latent 还原近似图像。
+  - Remote Sampling custom node 第一版已验证单采样器、图生图 clean latent 和双采样器串联；尚未验证复杂 conditioning、高分辨率和真实复杂工作流自动转换稳定性。
+
+## 下一步动作
+第一版已完成。后续扩展建议从复杂 conditioning 支持、更多 remote profile、以及更强隐私方案开始。

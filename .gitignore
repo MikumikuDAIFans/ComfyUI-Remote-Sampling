@@ -1,0 +1,68 @@
+# Local archives and runtime artifacts
+/_local_archive/
+/jobs/
+/latents/
+/logs/
+/runs/
+/transfer/
+/output/
+/outputs/
+/tmp/
+/temp/
+
+# Python cache and local environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# ComfyUI and model artifacts
+models/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+*.latent
+*.tar
+*.tar.gz
+*.tar.xz
+*.zip
+*.7z
+
+# Generated images and media
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.mp4
+*.mov
+
+# Local logs and tunnels
+*.log
+*.out
+*.err
+logs_local_tunnel_*.txt
+logs_local_tunnel_*.err.txt
+
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*_askpass*.cmd
+*_askpass*.ps1
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

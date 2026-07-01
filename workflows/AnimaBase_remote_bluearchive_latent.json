@@ -1,0 +1,995 @@
+{
+  "id": "f7a250a1-53fb-496b-8c39-c60d9e764028",
+  "revision": 0,
+  "last_node_id": 200,
+  "last_link_id": 236,
+  "nodes": [
+    {
+      "id": 114,
+      "type": "EmptyLatentImage",
+      "pos": [
+        1142.9074922160676,
+        154.6335570548318
+      ],
+      "size": [
+        270,
+        144
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "width",
+          "localized_name": "宽度",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "label": "height",
+          "localized_name": "高度",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "label": "batch_size",
+          "localized_name": "批量大小",
+          "name": "batch_size",
+          "type": "INT",
+          "widget": {
+            "name": "batch_size"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "LATENT",
+          "localized_name": "Latent",
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            236
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.15.1",
+        "Node name for S&R": "EmptyLatentImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.6.2"
+        }
+      },
+      "widgets_values": [
+        1920,
+        1216,
+        1
+      ]
+    },
+    {
+      "id": 12,
+      "type": "CLIPTextEncode",
+      "pos": [
+        353.2856997861633,
+        748.5143356656606
+      ],
+      "size": [
+        550.328125,
+        278.234375
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip",
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 227
+        },
+        {
+          "label": "text",
+          "localized_name": "文本",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CONDITIONING",
+          "localized_name": "条件",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            40
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "Node name for S&R": "CLIPTextEncode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "worst quality, low quality, score_1, score_2, score_3, artist name,\n\nThis image suffers from low resolution and poor quality, appearing pixelated, blurry, and full of compression or jpeg artifacts. \n\nThe scene is cluttered with many small figures, heads, or people in the background that look like chibi characters, dolls, or fumo dolls, surrounding the subject with a large collection of plush toys. \n\nThe artwork looks like a fake anime or game screenshot with noise, errors, and scan lines, resembling something unfinished sketch with a simple, abstract, or monochrome background.\n\n\n\nThe anatomy is incorrect, featuring bad proportions, bad perspective, and ugly, deformed body parts such as bad hands, bad feet, fused or missing fingers, extra limbs, and twisted or flexible deformities. The image contains four fingers, six fingers, four toes, six toes.\n\nThis image contains many of the artist's signatures around the edges, and contains many watermarks, signatures, logos, or censorship bars like mosaics, and has an low-score AI-generated error.\n\nThe character in this image has a white area above the eyes, a white forehead, and many lines on the eyelids.\n\nDraw by @Alexander Groznov, @Andrew Wyeth, @Boris Vallejo, @Entei Ryu, @Manara Milo, @Marco Turini, @Norman Rockwell, @Paulina Sadowska, @Syd Mead, @Syd Mills, @THORES Shibamoto, @chinese anime style, @renwan."
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 44,
+      "type": "UNETLoader",
+      "pos": [
+        147.30291682847792,
+        -94.93958473765562
+      ],
+      "size": [
+        307.59375,
+        108
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "unet_name",
+          "localized_name": "UNet名称",
+          "name": "unet_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "unet_name"
+          },
+          "link": null
+        },
+        {
+          "label": "weight_dtype",
+          "localized_name": "数据类型",
+          "name": "weight_dtype",
+          "type": "COMBO",
+          "widget": {
+            "name": "weight_dtype"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "MODEL",
+          "localized_name": "模型",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            220
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.11.0",
+        "Node name for S&R": "UNETLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "anima-base-v1.0.safetensors",
+        "default"
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 45,
+      "type": "CLIPLoader",
+      "pos": [
+        169.43881189153234,
+        198.65128275308524
+      ],
+      "size": [
+        270,
+        140
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip_name",
+          "localized_name": "CLIP名称",
+          "name": "clip_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "clip_name"
+          },
+          "link": null
+        },
+        {
+          "label": "type",
+          "localized_name": "类型",
+          "name": "type",
+          "type": "COMBO",
+          "widget": {
+            "name": "type"
+          },
+          "link": null
+        },
+        {
+          "label": "device",
+          "localized_name": "设备",
+          "name": "device",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "device"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CLIP",
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            221
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.11.0",
+        "Node name for S&R": "CLIPLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "qwen_3_06b_base.safetensors",
+        "stable_diffusion",
+        "default"
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 19,
+      "type": "KSampler",
+      "pos": [
+        820.8937654950106,
+        -13.298707179355805
+      ],
+      "size": [
+        297.15625,
+        312
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "model",
+          "localized_name": "模型",
+          "name": "model",
+          "type": "MODEL",
+          "link": 223
+        },
+        {
+          "label": "positive",
+          "localized_name": "正面条件",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 234
+        },
+        {
+          "label": "negative",
+          "localized_name": "负面条件",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 40
+        },
+        {
+          "label": "latent_image",
+          "localized_name": "Latent图像",
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 235
+        },
+        {
+          "label": "seed",
+          "localized_name": "种子",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "label": "steps",
+          "localized_name": "步数",
+          "name": "steps",
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        },
+        {
+          "label": "cfg",
+          "localized_name": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "widget": {
+            "name": "cfg"
+          },
+          "link": null
+        },
+        {
+          "label": "sampler_name",
+          "localized_name": "采样器名称",
+          "name": "sampler_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "sampler_name"
+          },
+          "link": null
+        },
+        {
+          "label": "scheduler",
+          "localized_name": "调度器",
+          "name": "scheduler",
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler"
+          },
+          "link": null
+        },
+        {
+          "label": "denoise",
+          "localized_name": "降噪",
+          "name": "denoise",
+          "type": "FLOAT",
+          "widget": {
+            "name": "denoise"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "LATENT",
+          "localized_name": "Latent",
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            10
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.40",
+        "Node name for S&R": "KSampler",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        985078519401350,
+        "randomize",
+        30,
+        5.2,
+        "seeds_2",
+        "simple",
+        1
+      ]
+    },
+    {
+      "id": 121,
+      "type": "WeiLinPromptUIWithoutLora",
+      "pos": [
+        -76.230245386809,
+        395.38529235545906
+      ],
+      "size": [
+        385.1875,
+        300
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "opt_text",
+          "name": "opt_text",
+          "shape": 7,
+          "type": "*",
+          "link": null
+        },
+        {
+          "localized_name": "opt_clip",
+          "name": "opt_clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": null
+        },
+        {
+          "localized_name": "positive",
+          "name": "positive",
+          "type": "STRING",
+          "widget": {
+            "name": "positive"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "auto_random",
+          "name": "auto_random",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "auto_random"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "temp_str",
+          "name": "temp_str",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "temp_str"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "random_template",
+          "name": "random_template",
+          "shape": 7,
+          "type": "STRING",
+          "widget": {
+            "name": "random_template"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "字符串",
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "条件",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": null
+        },
+        {
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "WeiLinPromptUIWithoutLora",
+        "ue_properties": {
+          "version": "7.0.1",
+          "widget_ue_connectable": {
+            "positive": true,
+            "auto_random": true,
+            "temp_str": true,
+            "random_template": true
+          }
+        }
+      },
+      "widgets_values": [
+        "",
+        false,
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "id": 11,
+      "type": "CLIPTextEncode",
+      "pos": [
+        363.5155948425852,
+        379.23656278258454
+      ],
+      "size": [
+        553.140625,
+        305.34375
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip",
+          "localized_name": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 233
+        },
+        {
+          "label": "text",
+          "localized_name": "文本",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CONDITIONING",
+          "localized_name": "条件",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            234
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "Node name for S&R": "CLIPTextEncode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "masterpiece, best quality, score_9, score_8, score_7, absurdres, highres, newest, anime illustration, detailed sports anime style, clean lineart, sharp cel shading, dynamic composition, dramatic boxing scene, intense action, 2girls, two adult female boxers, only two characters, no extra people, full body visible, clear separation between the two fighters,\n\nboxing ring, indoor arena, bright overhead stadium lights, boxing ropes, canvas floor, blurred cheering crowd in the background, cinematic low-angle camera, motion blur, sweat droplets, impact energy, focused expressions, athletic bodies, professional boxing match, no blood, no gore,\n\nCharacter A, left side fighter,white hair, cyan streaks, cyan inner hair, short hair, bob cut, side bangs, swept bangs, hair tucked behind ear, black hair clips, x hair clips, cross hair clips, two hair clips, elf ears, pointed ears, cyan eyes, blue-green eyes, diamond-shaped pupils, white pupils, red boxing gloves, white and crimson sleeveless boxing top, black boxing shorts with red trim, red ankle boxing shoes, determined expression, stepping forward with her left foot, torso twisting forward, throwing a fast straight left jab toward the opponent, right glove guarding her cheek, silver hair tips flying from the motion,\n\nCharacter B, right side fighter, fox girl,fox ears,fox tail,white hair,high ponytail,yellow eyes,sleep mask,mature female,voluptuous,large breasts,(d cup breasts:1.1),white crop top,sportswear,athletic shorts,black thighhighs,single leg garter,white sneakers, blue boxing gloves, navy blue sleeveless boxing top, white boxing shorts with blue trim, blue ankle boxing shoes, sharp focused eyes, leaning backward to slip the incoming jab, left glove raised in high guard, right glove pulled back preparing a counter hook, feet pivoting on the canvas, long ponytail swinging behind her,\n\nclear visual contrast between Character A and Character B, Character A has red gloves and short white hair, Character B has blue gloves and white hair,high ponytail,ple ponytail, distinct outfits, distinct glove colors, distinct hairstyles, readable silhouettes, no character feature mixing, no duplicated faces, no merged bodies\n\nmasterpiece, best quality, score_7, @sola7764, @banpai akira, [@yoneyama mai, @mika pikazo, (@quasarcake:0.8), :(@onono imoko:0.6), @rei \\(sanbonzakura\\), (@cogecha:0.8), :12]"
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 115,
+      "type": "Lora Loader (LoraManager)",
+      "pos": [
+        486.50169195194337,
+        -65.90200929162756
+      ],
+      "size": [
+        281.84375,
+        380.5625
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 220
+        },
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "AUTOCOMPLETE_TEXT_LORAS",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        },
+        {
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": 221
+        },
+        {
+          "name": "lora_stack",
+          "shape": 7,
+          "type": "LORA_STACK",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "模型",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            223
+          ]
+        },
+        {
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            227,
+            233
+          ]
+        },
+        {
+          "localized_name": "trigger_words",
+          "name": "trigger_words",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "localized_name": "loaded_loras",
+          "name": "loaded_loras",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-lora-manager",
+        "ver": "1.0.1",
+        "Node name for S&R": "Lora Loader (LoraManager)",
+        "ue_properties": {
+          "version": "7.0.1",
+          "widget_ue_connectable": {}
+        },
+        "__lm_widget_ids": [
+          "__lm_autocomplete_meta_text",
+          "text",
+          "loras"
+        ]
+      },
+      "widgets_values": [
+        {
+          "version": 1,
+          "textWidgetName": "text"
+        },
+        "<lora:AellaStella_v1_anima_char-000018-2c97:1.10> <lora:BlueArchiveStyleB1:1.00>",
+        [
+          {
+            "name": "AellaStella_v1_anima_char-000018-2c97",
+            "strength": "1.10",
+            "active": false,
+            "expanded": false,
+            "clipStrength": "1.10",
+            "locked": false
+          },
+          {
+            "name": "BlueArchiveStyleB1",
+            "strength": "1.00",
+            "active": true,
+            "expanded": false,
+            "clipStrength": "1.00",
+            "locked": false
+          }
+        ]
+      ]
+    },
+    {
+      "id": 122,
+      "type": "LatentRotate",
+      "pos": [
+        1453.3765433349338,
+        172.19093262346166
+      ],
+      "size": [
+        270,
+        80
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "Latent",
+          "name": "samples",
+          "type": "LATENT",
+          "link": 236
+        },
+        {
+          "localized_name": "旋转",
+          "name": "rotation",
+          "type": "COMBO",
+          "widget": {
+            "name": "rotation"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "Latent",
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            235
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.26.0",
+        "Node name for S&R": "LatentRotate",
+        "ue_properties": {
+          "version": "7.0.1",
+          "widget_ue_connectable": {
+            "rotation": true
+          }
+        }
+      },
+      "widgets_values": [
+        "none"
+      ]
+    },
+    {
+      "id": 200,
+      "type": "SaveLatent",
+      "pos": [
+        1350,
+        520
+      ],
+      "size": [
+        315,
+        82
+      ],
+      "flags": {},
+      "order": 99,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "samples",
+          "localized_name": "Latent",
+          "name": "samples",
+          "link": 10,
+          "type": "LATENT"
+        },
+        {
+          "localized_name": "filename_prefix",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null,
+          "label": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING"
+        }
+      ],
+      "outputs": [
+        {
+          "links": null,
+          "localized_name": "Latent",
+          "label": "LATENT",
+          "name": "LATENT",
+          "slot_index": 0,
+          "type": "LATENT"
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SaveLatent"
+      },
+      "widgets_values": [
+        "latents/AnimaBase_remote"
+      ]
+    }
+  ],
+  "links": [
+    [
+      40,
+      12,
+      0,
+      19,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      220,
+      44,
+      0,
+      115,
+      0,
+      "MODEL"
+    ],
+    [
+      221,
+      45,
+      0,
+      115,
+      2,
+      "CLIP"
+    ],
+    [
+      223,
+      115,
+      0,
+      19,
+      0,
+      "MODEL"
+    ],
+    [
+      227,
+      115,
+      1,
+      12,
+      0,
+      "CLIP"
+    ],
+    [
+      233,
+      115,
+      1,
+      11,
+      0,
+      "CLIP"
+    ],
+    [
+      234,
+      11,
+      0,
+      19,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      235,
+      122,
+      0,
+      19,
+      3,
+      "LATENT"
+    ],
+    [
+      236,
+      114,
+      0,
+      122,
+      0,
+      "LATENT"
+    ],
+    [
+      10,
+      19,
+      0,
+      200,
+      0,
+      "LATENT"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.9229599817706478,
+      "offset": [
+        245.85978130470332,
+        116.94430236912314
+      ]
+    },
+    "workflowRendererVersion": "LG",
+    "frontendVersion": "1.45.19",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true,
+    "ue_links": [],
+    "links_added_by_ue": [],
+    "qgn_navigation_groups": [
+      {
+        "id": "qgn_1767333881501_q5zxounsl",
+        "groupName": "🌟底模加载区",
+        "shortcutKey": "1",
+        "zoomScale": 135,
+        "order": 0
+      },
+      {
+        "id": "qgn_1767333884329_1ver8j1r0",
+        "groupName": "🌟Lora加载区",
+        "shortcutKey": "2",
+        "zoomScale": 100,
+        "order": 1
+      },
+      {
+        "id": "qgn_1767333885645_dd38ejq78",
+        "groupName": "🌟分辨率/批次大小设置/提示词编写区",
+        "shortcutKey": "3",
+        "zoomScale": 100,
+        "order": 2
+      },
+      {
+        "id": "qgn_1767333896551_0ekmkbyd3",
+        "groupName": "📌组管理区",
+        "shortcutKey": "4",
+        "zoomScale": 100,
+        "order": 3
+      },
+      {
+        "id": "qgn_1767333900355_ob9j6r9t6",
+        "groupName": "【↔️图像对比】总开关",
+        "shortcutKey": "5",
+        "zoomScale": 120,
+        "order": 4
+      },
+      {
+        "id": "qgn_1767333906878_kwc65r005",
+        "groupName": "⚙️文生图参数控制区",
+        "shortcutKey": "6",
+        "zoomScale": 180,
+        "order": 5
+      },
+      {
+        "id": "qgn_1767333918583_ibe8ehjgr",
+        "groupName": "【📦文生图可选】D站画廊",
+        "shortcutKey": "7",
+        "zoomScale": 100,
+        "order": 6
+      },
+      {
+        "id": "qgn_1767333935768_fmce38617",
+        "groupName": "【📦文生图可选】底图控制网SDXL",
+        "shortcutKey": "8",
+        "zoomScale": 100,
+        "order": 7
+      },
+      {
+        "id": "qgn_1767333939135_kq788oyz2",
+        "groupName": "【📦文生图可选】底图控制网Z-Image",
+        "shortcutKey": "9",
+        "zoomScale": 100,
+        "order": 8
+      }
+    ],
+    "qgn_locked": true,
+    "favoritedWidgets": {
+      "favorites": [
+        {
+          "nodeLocatorId": "58",
+          "widgetName": "$$canvas-image-preview"
+        }
+      ]
+    }
+  },
+  "version": 0.4
+}

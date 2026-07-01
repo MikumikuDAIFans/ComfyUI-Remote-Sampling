@@ -1,0 +1,49 @@
+{
+  "1": {
+    "class_type": "LoadLatent",
+    "inputs": {
+      "latent": "ComfyUI_00042_latent_00001_.latent"
+    },
+    "_meta": {
+      "title": "Load downloaded latent"
+    }
+  },
+  "2": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae_2.safetensors"
+    },
+    "_meta": {
+      "title": "Load local VAE"
+    }
+  },
+  "3": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "1",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Local VAE Decode"
+    }
+  },
+  "4": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "3",
+        0
+      ],
+      "filename_prefix": "remote_decode/ComfyUI_00042_local_decode"
+    },
+    "_meta": {
+      "title": "Save local image"
+    }
+  }
+}

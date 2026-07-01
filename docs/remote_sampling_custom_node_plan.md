@@ -1,0 +1,282 @@
+## 计划元数据
+- Plan ID: remote-sampling-custom-node-v1
+- Version: v1
+- Last updated: 2026-06-30 17:50 Asia/Shanghai
+- Canonical progress file: F:\TieguoDun\Remote_comfyui\remote_sampling_custom_node_plan.md
+- Related handoff file: none
+- Current branch: not applicable
+- Current active phase: complete
+- Execution readiness: executing
+
+## 目标
+开发一套 ComfyUI 自定义节点，把本地工作流中的采样器变成远程采样代理：本地 ComfyUI 继续负责输入图片加载、VAEEncode、conditioning 构造、本地中间流程和最终 VAEDecode/SaveImage；远端 ComfyUI 只负责扩散模型采样，接收 latent/conditioning/采样参数，返回采样后的 latent。第一版目标是最快验证 `Remote_Sampling_local -> Remote_Sampling_remote` 这个核心抽象是否稳定。
+
+## 范围与约束
+- In scope:
+  - 新增最小 ComfyUI custom node 包 `ComfyUI-Remote-Sampling`。
+  - 实现 `Remote_Sampling_local`：接口尽量对齐基础 `KSampler`，序列化 latent/positive/negative/采样参数，提交远端任务，下载结果 latent 并返回给本地 workflow。
+  - 实现 `Remote_Sampling_remote`：远端读取任务包，使用远端 workflow 提供的 `MODEL` 调用 ComfyUI sampler，写出 output latent。
+  - 支持当前 Anima profile 的最小远端工作流模板。
+  - 使用 `.pt` 作为第一版 tensor/job 序列化格式。
+- Out of scope:
+  - 第一版不支持 ControlNet、IPAdapter、AnimateDiff、复杂 sampler hook、远端 batch 合并。
+  - 第一版不做任意复杂 workflow 的全自动图转换。
+  - 第一版不承诺强隐私；clean latent 和 conditioning 仍可能泄露图像/语义信息。
+- Constraints:
+  - 远端项目文件只写入 `/home/user02/remote_ComfyUI`。
+  - 远端服务只监听 `127.0.0.1`，不开放公网端口。
+  - 优先复用已有 company-lab 跳板能力。
+  - 第一版允许使用 `torch.save/torch.load` 处理受信任 job 包，后续再升级 safetensors。
+
+## 执行阶段
+### Phase 1: 协议与目录骨架
+- Purpose: 固定最小 job 包结构，避免本地节点和远端节点各自漂移。
+- Outputs:
+  - `ComfyUI-Remote-Sampling/` custom node 包。
+  - `protocol/` 中的 job manifest 和 tensor codec。
+  - `remote_profiles/` 中当前 Anima profile 的配置/模板。
+- Completion criteria:
+  - 本地和远端节点能用同一个协议读写 job。
+  - job 目录包含 `job.json`、`inputs.pt`、`output.pt`、`result.json`。
+- Validation:
+  - `python -m py_compile` 通过。
+  - 用离线 tensor roundtrip 脚本验证 `.pt` 读写。
+- Evidence:
+  - 已创建 `F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling`。
+  - 已实现 `protocol.py`，包含 `job.json` manifest、`inputs.pt` 和 `output.pt` 的读写函数。
+  - 本地语法检查通过：`python -m py_compile ComfyUI-Remote-Sampling\...`。
+
+### Phase 2: 最小自定义节点实现
+- Purpose: 验证本地代理采样器与远端实际采样器的抽象是否成立。
+- Outputs:
+  - `Remote_Sampling_local` 节点。
+  - `Remote_Sampling_remote` 节点。
+  - 最小远端 remote profile prompt。
+- Completion criteria:
+  - 本地节点能接收 `MODEL/CONDITIONING/LATENT/seed/steps/cfg/sampler/scheduler/denoise`。
+  - 远端节点能读取 job，调用 sampler，写回 output latent。
+  - 本地节点能返回远端 output latent 给后续本地节点。
+- Validation:
+  - 本地 ComfyUI 能加载节点。
+  - 远端 ComfyUI 能加载节点。
+  - 单个采样器 reduced smoke test 成功。
+- Evidence:
+  - 已实现本地节点：`ComfyUI-Remote-Sampling\nodes\remote_sampling_local.py`。
+  - 已实现远端节点：`ComfyUI-Remote-Sampling\nodes\remote_sampling_remote.py`。
+  - 已实现 CLI bridge：`ComfyUI-Remote-Sampling\tools\remote_sampling_job_cli.py`。
+  - 本地安装路径：`F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\custom_nodes\ComfyUI-Remote-Sampling`。
+  - 远端安装路径：`/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling`。
+  - 本地 portable Python 模拟加载通过，节点映射包含 `Remote_Sampling_local` 和 `Remote_Sampling_remote`。
+  - 远端 venv 模拟加载通过，节点映射包含 `Remote_Sampling_local` 和 `Remote_Sampling_remote`。
+  - 远端 `/object_info` 验证通过，`Remote_Sampling_remote` 可见。
+  - 本地临时 ComfyUI `127.0.0.1:8198` 验证通过，`Remote_Sampling_local` 可见。
+  - 最小端到端 smoke test 成功：
+    - 本地测试 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_node_smoke_20260630_1500_local_api.json`
+    - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_145547_8a1884d8_smoke_002`
+    - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_145547_8a1884d8_smoke_002`
+    - 远端 job 文件：`job.json`、`inputs.pt`、`output.pt`、`result.json`
+    - 本地最终图片：`F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\smoke_20260630_1500_00001_.png`
+    - 远端检查未发现匹配该 job 的 PNG/JPG/JPEG/WEBP 图片文件。
+  - 已停止临时本地 `8198` 和远端 `8197` ComfyUI 实例。
+
+### Phase 3: Profile 与远端模板验证
+- Purpose: 用当前 Anima 模型链路建立第一份可重复使用的远端 profile。
+- Outputs:
+  - `anima_qwen_aella_xcn` remote profile。
+  - 远端 API prompt 模板：`UNETLoader -> CLIPLoader -> LoraLoader... -> Remote_Sampling_remote -> SaveLatent/Result`。
+- Completion criteria:
+  - profile 能加载 `anima-base-v1.0`、`qwen_3_06b_base`、Aella 和 xcn LoRA。
+  - profile 不包含远端图片节点。
+- Validation:
+  - `/object_info` 可见 `Remote_Sampling_remote`。
+  - 远端 prompt 禁止节点检查通过。
+- Evidence:
+  - `remote_sampling_job_cli.py` 已内置第一版 `anima_qwen_aella_xcn` profile prompt：
+    - `UNETLoader(anima-base-v1.0.safetensors)`
+    - `CLIPLoader(qwen_3_06b_base.safetensors)`
+    - `LoraLoader(AellaStella_v1_anima_char-000018-2c97, 1.10)`
+    - `LoraLoader(xcn_ogpt_v1a, 1.00)`
+    - `Remote_Sampling_remote`
+  - 该 profile 已在最小端到端 smoke test 中被实际调用。
+  - 该 profile 已在 img2img clean latent smoke test 中被实际调用。
+  - 该 profile 已在双 `Remote_Sampling_local` 顺序执行 smoke test 中被实际调用。
+
+### Phase 4: 多采样器与工作流转换雏形
+- Purpose: 在单采样器稳定后，验证多个 `Remote_Sampling_local` 顺序执行。
+- Outputs:
+  - 多采样器测试 workflow。
+  - 初版 KSampler -> Remote_Sampling_local 替换工具或转换规则文档。
+- Completion criteria:
+  - 两个远程采样器能按本地 workflow 顺序执行。
+  - 每个采样器有独立 job id 和 result。
+- Validation:
+  - 多采样器 reduced smoke test。
+- Evidence:
+  - img2img clean latent smoke test 已通过：
+    - 本地测试 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_node_img2img_20260630_1735_local_api.json`
+    - 本地输入图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\input\img2img_smoke_20260630_1215_input_image.png`
+    - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_173211_f7a66697_img2img_001`
+    - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_173211_f7a66697_img2img_001`
+    - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\img2img_20260630_1735_00001_.png`
+    - 远端 job 文件：`job.json`、`inputs.pt`、`output.pt`、`result.json`
+  - 双采样器 reduced smoke test 已通过：
+    - 本地测试 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_node_dual_20260630_1745_local_api.json`
+    - 第一个本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_173416_f6fce9a4_dual_a`
+    - 第二个本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_173505_6971ed02_dual_b`
+    - 第一个远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_173416_f6fce9a4_dual_a`
+    - 第二个远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_173505_6971ed02_dual_b`
+    - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\dual_20260630_1745_00001_.png`
+    - 两个远端 job 均只包含 `job.json`、`inputs.pt`、`output.pt`、`result.json`。
+    - 远端输出目录未发现匹配该双采样器测试的图片文件。
+
+### Phase 5: 转换规则与可用性增强
+- Purpose: 从手工构造测试 workflow 进入可持续使用形态，明确普通 KSampler 到 `Remote_Sampling_local` 的转换规则。
+- Outputs:
+  - 初版转换规则文档或转换脚本。
+  - profile 配置外置化。
+  - job/result metadata 增强。
+- Completion criteria:
+  - 能把基础 `KSampler` 节点替换为 `Remote_Sampling_local`，并删除本地 `MODEL` 边。
+  - 能为多个采样器生成稳定 `sampler_id`。
+  - 每次运行能记录远端 profile、模型清单、LoRA 清单、输入/输出 latent 路径和状态。
+- Validation:
+  - 对一个从真实工作流裁剪出的多采样器 workflow 做转换和 reduced smoke test。
+  - 重启本地常用 `8188` 后确认 WebUI 可直接插入/编辑节点。
+  - 远端服务常驻和临时启动两种模式都能工作。
+- Evidence:
+  - 已新增最小转换脚本：`F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py`。
+  - 脚本已通过语法检查：`python -m py_compile tools\convert_ksampler_to_remote_sampling.py`。
+  - 转换脚本已支持 `--bypass-local-lora-clip`：
+    - 当 `CLIPTextEncode.clip` 指向本地 `LoraLoader` 或 `Lora Loader (LoraManager)` 时，可绕回上游 `CLIPLoader`。
+    - 这样转换后本地 `UNETLoader/LoRA Loader` 分支可被不可达节点裁剪，避免本地加载 diffusion model。
+  - 已对一个裁剪 API prompt 完成自动转换：
+    - 源 prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_converter_source_20260630_1755_api.json`
+    - 转换后 prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_converter_converted_20260630_1755_api.json`
+    - 转换节点：`500`
+    - 被剪掉的不可达本地模型节点：`44`
+  - 自动转换后的 workflow 已完成端到端 smoke test：
+    - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_174134_47ed7415_converted_500`
+    - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_174134_47ed7415_converted_500`
+    - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\converted_20260630_1755_00001_.png`
+  - 已外置 `anima_qwen_aella_xcn` profile：
+    - Profile file: `F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling\profiles\anima_qwen_aella_xcn.json`
+    - Bridge: `F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling\tools\remote_sampling_job_cli.py`
+    - Profile prompt 生成检查通过，远端 prompt class list 为 `UNETLoader/CLIPLoader/LoraLoader/LoraLoader/Remote_Sampling_remote`，禁止图片节点为空。
+    - 外置 profile 回归 smoke test 已通过：
+      - 本地 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_profile_config_20260630_1810_api.json`
+      - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_230047_c096b821_profile_config_500`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_230047_c096b821_profile_config_500`
+      - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\profile_config_20260630_1810_00001_.png`
+  - 已增强 job manifest metadata：
+    - `job.json` 增加 `profile` 摘要：profile 名称、包内相对 source、UNET、CLIP、LoRA 名称和 strength。
+    - `job.json` 增加 `remote` 摘要：远端 base、ComfyUI、job_dir、prompt、job_root。
+    - metadata 回归 smoke test 已通过：
+      - 本地 API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_metadata_20260630_1818_api.json`
+      - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_230516_a4f0ee65_metadata_500`
+      - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_230516_a4f0ee65_metadata_500`
+      - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\metadata_20260630_1818_00001_.png`
+  - 已完成真实提取 workflow 裁剪版自动转换和 reduced smoke：
+    - 输入 prompt: `F:\TieguoDun\Remote_comfyui\workflows\extracted_ComfyUI_00042\prompt.json`
+    - 转换后 prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\ComfyUI_00042_remote_sampling_converted_20260630_api.json`
+    - reduced smoke prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\ComfyUI_00042_remote_sampling_converted_reduced_20260630_1825_api.json`
+    - 转换节点：`19`
+    - rewired clip refs：`11: 115 -> 45`，`12: 115 -> 45`
+    - 被裁剪节点：`44`、`115`、`121`
+    - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260630_230936_9dd9e4fe_real00042_reduced_19`
+    - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260630_230936_9dd9e4fe_real00042_reduced_19`
+    - 本地最终图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\real00042_reduced_20260630_1825_00001_.png`
+    - 远端输出目录未发现匹配图片文件。
+  - 已固化远端 ComfyUI tmux 服务管理：
+    - 管理脚本：`F:\TieguoDun\Remote_comfyui\tools\remote_comfy_service.py`
+    - tmux session：`remote-comfyui-8197`
+    - 监听地址：`127.0.0.1:8197`
+    - 已验证 `status -> start -> status -> logs -> stop -> status`。
+    - start 后 `/object_info` 返回 `819` 个节点，`Remote_Sampling_remote` 可见。
+    - stop 后 tmux 不在，`8197` 无监听。
+  - 本地常用 `8188` 已验证可直接使用 `Remote_Sampling_local`：
+    - `/object_info` 节点总数 `2190`，`Remote_Sampling_local` 可见。
+    - API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_g2_8188_smoke_20260701_api.json`
+    - 本地输出图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\g2_8188_smoke_20260701_00001_.png`
+  - 真实提取 workflow 完整尺寸已验证：
+    - API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\ComfyUI_00042_remote_sampling_converted_full_20260701_api.json`
+    - 参数：`1216x1920`、`30 steps`、seed `664928445236589`。
+    - 本地输出图片: `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\real00042_full_20260701_00001_.png`
+    - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260701_001457_4a139116_real00042_full_19`
+    - 远端 prompt class list 只有 `UNETLoader/CLIPLoader/LoraLoader/LoraLoader/Remote_Sampling_remote`，禁止图片节点为空。
+  - metadata 审计增强已验证：
+    - API prompt: `F:\TieguoDun\Remote_comfyui\workflows\runs\remote_sampling_g4_audit_final_20260701_api.json`
+    - 本地 job: `F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_20260701_002701_c638f4f7_g4_audit_final_500`
+    - 远端 job: `/home/user02/remote_ComfyUI/jobs/remote_sampling_20260701_002701_c638f4f7_g4_audit_final_500`
+    - `job.json.local.files` 记录 `inputs.pt/output.pt/result.json` 的 size/SHA256。
+    - `result.json.files.output.pt` 记录 output latent 的 size/SHA256。
+  - 已新增文档：
+    - Goal 文档：`F:\TieguoDun\Remote_comfyui\remote_sampling_completion_goal.md`
+    - 转换规则：`F:\TieguoDun\Remote_comfyui\remote_sampling_workflow_conversion_rules.md`
+    - 使用说明：`F:\TieguoDun\Remote_comfyui\remote_sampling_usage.md`
+  - 最终清理检查通过：
+    - 远端 `127.0.0.1:8197` 无监听。
+    - 关键远端 job 目录无 PNG/JPG/JPEG/WEBP。
+    - 远端 `ComfyUI/output` 未发现关键 job 的匹配图片文件。
+
+## 决策记录
+- Verified facts:
+  - 当前脚本链路已证明远端只接收 input latent、只输出 output latent，本地负责图片输入编码和最终解码。
+  - `Remote_Sampling_local` 自定义节点形态下，img2img clean latent 输入已通过验证。
+  - 两个 `Remote_Sampling_local` 串联时，第二个节点能接收第一个节点返回的 latent 继续远端采样。
+  - 远端模型资源已归位到 `/home/user02/remote_ComfyUI/ComfyUI/models`。
+  - 当前核心模型链路为 `anima-base-v1.0`、`qwen_3_06b_base`、Aella LoRA、xcn LoRA。
+  - `Remote_Sampling_local` 不应强制接收本地 `MODEL`，否则本地会为了占位输入加载扩散模型，违背“远端负责采样模型”的目标。
+- Active assumptions:
+  - 第一版基础 `CONDITIONING` 可以通过 `torch.save` 序列化并在同版本/近似版本 ComfyUI + PyTorch 环境中反序列化。
+  - 当前本地/远端 ComfyUI 的 conditioning 结构兼容。
+  - `Remote_Sampling_local` 可先依赖配置好的 profile prompt，而不是自动解析本地 `MODEL` 对象。
+- Locked decisions:
+  - 第一版采用 profile-based remote sampling，不做任意 workflow 全自动转换。
+  - 第一版 `.pt` 序列化是受信任内部协议，后续再升级到 safetensors + JSON。
+  - `MODEL` 不从本地传输，远端通过 profile 自行加载等价模型链路。
+  - 本地 workflow 是主 runtime，远端只是 sampling backend。
+  - 第一版 `Remote_Sampling_local` 不使用本地 `MODEL` 输入；由 `remote_profile` 决定远端模型链路。后续 workflow converter 负责删除原 KSampler 的 model 边。
+- Open questions:
+  - 本地和远端 `CONDITIONING` 对象结构在所有复杂节点下是否仍能稳定序列化。
+  - 远端 profile prompt 是用 ComfyUI API prompt 触发，还是后续改为常驻服务直接调用节点。
+  - 是否需要把 VAE 从远端长期移除，以降低 latent 被直接解码的便利性。
+  - 本地 CLIP/conditioning 与远端 LoRA-patched model/clip 的最佳一致性策略仍需设计；当前最小 smoke 使用本地 CLIP conditioning + 远端 model LoRA profile，已能跑通但不等于质量最优。
+
+## 关键制品与环境
+- Canonical docs:
+  - `F:\TieguoDun\Remote_comfyui\remote_sampling_custom_node_plan.md`
+  - `F:\TieguoDun\Remote_comfyui\plan.md`
+  - `F:\TieguoDun\Remote_comfyui\remote_sampling_completion_goal.md`
+  - `F:\TieguoDun\Remote_comfyui\remote_sampling_workflow_conversion_rules.md`
+  - `F:\TieguoDun\Remote_comfyui\remote_sampling_usage.md`
+- Important code or output artifacts:
+  - `F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling`: 新 custom node 包。
+  - `F:\TieguoDun\Remote_comfyui\jobs`: 本地 remote sampling job 目录。
+  - `F:\TieguoDun\Remote_comfyui\tools\run_remote_latent_local_decode.py`: 已验证的一键脚本，可复用连接和远端 prompt 提交流程。
+  - `F:\TieguoDun\Remote_comfyui\tools\remote_comfy_service.py`: 远端 ComfyUI tmux 服务管理脚本。
+  - `/home/user02/remote_ComfyUI/ComfyUI/custom_nodes`: 远端 custom node 安装目标。
+  - `F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\custom_nodes`: 本地 custom node 安装目标。
+- Required commands:
+  - `python -m py_compile <files>`: 本地语法检查。
+  - `python C:\Users\25454\.codex\skills\company-lab-2-server\scripts\server_exec.py --cmd "<cmd>"`: 远端命令执行。
+  - `python F:\TieguoDun\Remote_comfyui\tools\upload_to_company_server.py "<local>=<remote>"`: 上传文件到远端。
+  - `python F:\TieguoDun\Remote_comfyui\tools\remote_comfy_service.py status|start|stop|logs`: 管理远端 `127.0.0.1:8197` tmux 常驻服务。
+- Environment baseline:
+  - Local: Windows，本地 ComfyUI API `http://127.0.0.1:8188` 可用。
+  - Remote: Ubuntu 24.04 aarch64，ComfyUI 0.26.0，PyTorch `2.12.1+cu130`，NVIDIA GB10。
+
+## 进度台账
+- Overall progress: 第一版目标已完成；最小 custom node 核心抽象、图生图 clean latent、双远程采样器、自动转换、外置 profile、metadata 审计、真实 workflow 完整尺寸、本地 8188 使用、远端服务管理和最终文档均已完成验证。
+- Phase 1: done
+- Phase 2: done
+- Phase 3: done
+- Phase 4: done
+- Phase 5: done
+- Validation status: 第一版全部目标验证通过；复杂 conditioning 仍作为后续扩展风险，不属于本版完成阻塞项。
+- Residual risks:
+  - `CONDITIONING` 序列化兼容性是第一版最大技术风险。
+  - ComfyUI 内部 sampler API 可能随版本变化，需要按当前远端源码适配。
+  - 当前 bridge 依赖 `C:\Python314\python.exe` 中的 Paramiko；如果换机器，需要把 `python_executable` 配置为可用解释器。
+
+## 下一步动作
+第一版已完成。后续扩展从复杂 conditioning 支持、更多 profile、以及更强隐私方案开始。

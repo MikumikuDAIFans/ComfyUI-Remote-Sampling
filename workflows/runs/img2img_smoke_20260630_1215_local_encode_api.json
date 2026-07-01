@@ -1,0 +1,49 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "img2img_smoke_20260630_1215_input_image.png"
+    },
+    "_meta": {
+      "title": "Load local input image"
+    }
+  },
+  "2": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "qwen_image_vae_2.safetensors"
+    },
+    "_meta": {
+      "title": "Load local VAE"
+    }
+  },
+  "3": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "1",
+        0
+      ],
+      "vae": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Encode input image locally"
+    }
+  },
+  "4": {
+    "class_type": "SaveLatent",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "filename_prefix": "encoded_inputs/img2img_smoke_20260630_1215_input"
+    },
+    "_meta": {
+      "title": "Save local input latent"
+    }
+  }
+}

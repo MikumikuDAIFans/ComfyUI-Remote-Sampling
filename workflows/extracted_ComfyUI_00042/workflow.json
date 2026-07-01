@@ -1,0 +1,1032 @@
+{
+  "id": "f7a250a1-53fb-496b-8c39-c60d9e764028",
+  "revision": 0,
+  "last_node_id": 121,
+  "last_link_id": 234,
+  "nodes": [
+    {
+      "id": 8,
+      "type": "VAEDecode",
+      "pos": [
+        856.4612287294093,
+        -69.30569899129685
+      ],
+      "size": [
+        225,
+        8
+      ],
+      "flags": {
+        "collapsed": true,
+        "pinned": true
+      },
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "samples",
+          "name": "samples",
+          "type": "LATENT",
+          "link": 10
+        },
+        {
+          "label": "vae",
+          "name": "vae",
+          "type": "VAE",
+          "link": 11
+        }
+      ],
+      "outputs": [
+        {
+          "label": "IMAGE",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [
+            205,
+            206
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.40",
+        "Node name for S&R": "VAEDecode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 114,
+      "type": "EmptyLatentImage",
+      "pos": [
+        1142.9074922160676,
+        154.6335570548318
+      ],
+      "size": [
+        270,
+        144
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "width",
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "label": "height",
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": null
+        },
+        {
+          "label": "batch_size",
+          "name": "batch_size",
+          "type": "INT",
+          "widget": {
+            "name": "batch_size"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            219
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.15.1",
+        "Node name for S&R": "EmptyLatentImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.6.2"
+        }
+      },
+      "widgets_values": [
+        1216,
+        1920,
+        1
+      ]
+    },
+    {
+      "id": 110,
+      "type": "PreviewImage",
+      "pos": [
+        968.8158241326257,
+        380.63772012139475
+      ],
+      "size": [
+        476.90625,
+        626.59375
+      ],
+      "flags": {
+        "collapsed": false,
+        "pinned": true
+      },
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 205
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.16.4",
+        "Node name for S&R": "PreviewImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.2"
+        }
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 12,
+      "type": "CLIPTextEncode",
+      "pos": [
+        353.2856997861633,
+        748.5143356656606
+      ],
+      "size": [
+        550.328125,
+        278.234375
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 227
+        },
+        {
+          "label": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            40
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "Node name for S&R": "CLIPTextEncode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "worst quality, low quality, score_1, score_2, score_3, artist name,\n\nThis image suffers from low resolution and poor quality, appearing pixelated, blurry, and full of compression or jpeg artifacts. \n\nThe scene is cluttered with many small figures, heads, or people in the background that look like chibi characters, dolls, or fumo dolls, surrounding the subject with a large collection of plush toys. \n\nThe artwork looks like a fake anime or game screenshot with noise, errors, and scan lines, resembling something unfinished sketch with a simple, abstract, or monochrome background.\n\nThe anatomy is incorrect, featuring bad proportions, bad perspective, and ugly, deformed body parts such as bad hands, bad feet, fused or missing fingers, extra limbs, and twisted or flexible deformities. The image contains four fingers, six fingers, four toes, six toes.\n\nThis image contains many of the artist's signatures around the edges, and contains many watermarks, signatures, logos, or censorship bars like mosaics, and has an low-score AI-generated error.\n\nThe character in this image has a white area above the eyes, a white forehead, and many lines on the eyelids.\n\nDraw by @Alexander Groznov, @Andrew Wyeth, @Boris Vallejo, @Entei Ryu, @Manara Milo, @Marco Turini, @Norman Rockwell, @Paulina Sadowska, @Syd Mead, @Syd Mills, @THORES Shibamoto, @chinese anime style, @renwan."
+      ],
+      "color": "#322",
+      "bgcolor": "#533"
+    },
+    {
+      "id": 44,
+      "type": "UNETLoader",
+      "pos": [
+        147.30291682847792,
+        -94.93958473765562
+      ],
+      "size": [
+        307.59375,
+        108
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "unet_name",
+          "name": "unet_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "unet_name"
+          },
+          "link": null
+        },
+        {
+          "label": "weight_dtype",
+          "name": "weight_dtype",
+          "type": "COMBO",
+          "widget": {
+            "name": "weight_dtype"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            220
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.11.0",
+        "Node name for S&R": "UNETLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "anima-base-v1.0.safetensors",
+        "default"
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 15,
+      "type": "VAELoader",
+      "pos": [
+        174.06292193768132,
+        63.58008127153582
+      ],
+      "size": [
+        270,
+        80
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "vae_name",
+          "name": "vae_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "vae_name"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "VAE",
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            11
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.40",
+        "Node name for S&R": "VAELoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "qwen_image_vae_2.safetensors"
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 45,
+      "type": "CLIPLoader",
+      "pos": [
+        169.43881189153234,
+        198.65128275308524
+      ],
+      "size": [
+        270,
+        140
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip_name",
+          "name": "clip_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "clip_name"
+          },
+          "link": null
+        },
+        {
+          "label": "type",
+          "name": "type",
+          "type": "COMBO",
+          "widget": {
+            "name": "type"
+          },
+          "link": null
+        },
+        {
+          "label": "device",
+          "name": "device",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "device"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            221
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.11.0",
+        "Node name for S&R": "CLIPLoader",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "qwen_3_06b_base.safetensors",
+        "stable_diffusion",
+        "default"
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 113,
+      "type": "SaveImage",
+      "pos": [
+        1157.7845764081121,
+        86.50276871579163
+      ],
+      "size": [
+        225,
+        8
+      ],
+      "flags": {
+        "collapsed": true,
+        "pinned": true
+      },
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "images",
+          "name": "images",
+          "type": "IMAGE",
+          "link": 206
+        },
+        {
+          "label": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.19.0",
+        "Node name for S&R": "SaveImage",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "input_ue_unconnectable": {},
+          "version": "7.5.2"
+        }
+      },
+      "widgets_values": [
+        "ComfyUI"
+      ]
+    },
+    {
+      "id": 19,
+      "type": "KSampler",
+      "pos": [
+        820.8937654950106,
+        -13.298707179355805
+      ],
+      "size": [
+        297.15625,
+        312
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 223
+        },
+        {
+          "label": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 234
+        },
+        {
+          "label": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 40
+        },
+        {
+          "label": "latent_image",
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 219
+        },
+        {
+          "label": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "label": "steps",
+          "name": "steps",
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        },
+        {
+          "label": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "widget": {
+            "name": "cfg"
+          },
+          "link": null
+        },
+        {
+          "label": "sampler_name",
+          "name": "sampler_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "sampler_name"
+          },
+          "link": null
+        },
+        {
+          "label": "scheduler",
+          "name": "scheduler",
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler"
+          },
+          "link": null
+        },
+        {
+          "label": "denoise",
+          "name": "denoise",
+          "type": "FLOAT",
+          "widget": {
+            "name": "denoise"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            10
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.40",
+        "Node name for S&R": "KSampler",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        664928445236589,
+        "randomize",
+        30,
+        5.2,
+        "seeds_2",
+        "simple",
+        1
+      ]
+    },
+    {
+      "id": 121,
+      "type": "WeiLinPromptUIWithoutLora",
+      "pos": [
+        -76.230245386809,
+        395.38529235545906
+      ],
+      "size": [
+        385.1875,
+        300
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "opt_text",
+          "shape": 7,
+          "type": "*",
+          "link": null
+        },
+        {
+          "name": "opt_clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": null
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "WeiLinPromptUIWithoutLora",
+        "ue_properties": {
+          "version": "7.0.1",
+          "widget_ue_connectable": {
+            "positive": true,
+            "auto_random": true,
+            "temp_str": true,
+            "random_template": true
+          }
+        }
+      },
+      "widgets_values": [
+        "masterpiece, best quality, \n@nyalia_2025,\n1girl, animal hands, plana \\(blue archive\\), black dress, sleeveless dress, heart, halo, pov hands, black eyes, paw gloves, pov, gloves, black hairband, long hair, cheek squash, hand on another's face, red halo, heart-shaped halo, cat paws, hand on another's cheek, black choker, fur trim, hairband, symbol-shaped pupils, one eye closed, colored inner hair, braid, hair over one eye, multicolored hair, choker, looking at viewer, single braid, solo focus, pink hair, white background, white hair, simple background, heart-shaped pupils, blush, red pupils, 1boy, upper body, closed mouth, bare shoulders, pink pupils, pink halo, tail, cheek press, cat tail, off shoulder, black gloves, 1other, two-tone hair, alternate costume, smile, animal ear fluff, sensei \\(blue archive\\), black coat, grey hair, long sleeves, halter dress, halterneck, turtleneck, turtleneck dress\n<lora:mixed_styles_anima-base1_v5:1>",
+        false,
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "id": 11,
+      "type": "CLIPTextEncode",
+      "pos": [
+        363.5155948425852,
+        379.23656278258454
+      ],
+      "size": [
+        553.140625,
+        305.34375
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "clip",
+          "name": "clip",
+          "type": "CLIP",
+          "link": 233
+        },
+        {
+          "label": "text",
+          "name": "text",
+          "type": "STRING",
+          "widget": {
+            "name": "text"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "label": "CONDITIONING",
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            234
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.65",
+        "Node name for S&R": "CLIPTextEncode",
+        "ue_properties": {
+          "widget_ue_connectable": {},
+          "version": "7.5.2",
+          "input_ue_unconnectable": {}
+        }
+      },
+      "widgets_values": [
+        "allastella,1girl,alternate color,alternate hairstyle,bare shoulders,bow,covered mouth,covering own mouth,detached sleeves,eyelashes,eyeliner,hair between eyes,hair rings,hand over own mouth,hand up,limited palette,long hair,looking at viewer,makeup,nail polish,number tattoo,quad tails,red background,red bow,red theme,shoulder tattoo,sidelocks,simple background,sleeves past wrists,solo,square,tattoo,updo,upper body,dark \nlarge breasts, curvy, \n\nmasterpiece, best quality, score_7, @sola7764, @banpai akira, [@yoneyama mai, @mika pikazo, (@quasarcake:0.8), :(@onono imoko:0.6), @rei \\(sanbonzakura\\), (@cogecha:0.8), :12]"
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 115,
+      "type": "Lora Loader (LoraManager)",
+      "pos": [
+        495.169456706654,
+        -51.81689156522273
+      ],
+      "size": [
+        281.84375,
+        380.5625
+      ],
+      "flags": {
+        "pinned": true
+      },
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 220
+        },
+        {
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": 221
+        },
+        {
+          "name": "lora_stack",
+          "shape": 7,
+          "type": "LORA_STACK",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            223
+          ]
+        },
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            227,
+            233
+          ]
+        },
+        {
+          "name": "trigger_words",
+          "type": "STRING",
+          "links": null
+        },
+        {
+          "name": "loaded_loras",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-lora-manager",
+        "ver": "1.0.1",
+        "Node name for S&R": "Lora Loader (LoraManager)",
+        "ue_properties": {
+          "version": "7.0.1",
+          "widget_ue_connectable": {}
+        },
+        "__lm_widget_ids": [
+          "__lm_autocomplete_meta_text",
+          "text",
+          "loras"
+        ]
+      },
+      "widgets_values": [
+        {
+          "version": 1,
+          "textWidgetName": "text"
+        },
+        "<lora:AellaStella_v1_anima_char-000018-2c97:1.10> <lora:xcn_ogpt_v1a:1.00>",
+        [
+          {
+            "name": "AellaStella_v1_anima_char-000018-2c97",
+            "strength": "1.10",
+            "active": true,
+            "expanded": false,
+            "clipStrength": "1.10",
+            "locked": false
+          },
+          {
+            "name": "xcn_ogpt_v1a",
+            "strength": "1.00",
+            "active": true,
+            "expanded": false,
+            "clipStrength": "1.00",
+            "locked": false
+          }
+        ]
+      ]
+    }
+  ],
+  "links": [
+    [
+      10,
+      19,
+      0,
+      8,
+      0,
+      "LATENT"
+    ],
+    [
+      11,
+      15,
+      0,
+      8,
+      1,
+      "VAE"
+    ],
+    [
+      40,
+      12,
+      0,
+      19,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      205,
+      8,
+      0,
+      110,
+      0,
+      "IMAGE"
+    ],
+    [
+      206,
+      8,
+      0,
+      113,
+      0,
+      "IMAGE"
+    ],
+    [
+      219,
+      114,
+      0,
+      19,
+      3,
+      "LATENT"
+    ],
+    [
+      220,
+      44,
+      0,
+      115,
+      0,
+      "MODEL"
+    ],
+    [
+      221,
+      45,
+      0,
+      115,
+      1,
+      "CLIP"
+    ],
+    [
+      223,
+      115,
+      0,
+      19,
+      0,
+      "MODEL"
+    ],
+    [
+      227,
+      115,
+      1,
+      12,
+      0,
+      "CLIP"
+    ],
+    [
+      233,
+      115,
+      1,
+      11,
+      0,
+      "CLIP"
+    ],
+    [
+      234,
+      11,
+      0,
+      19,
+      1,
+      "CONDITIONING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 1.486436280241441,
+      "offset": [
+        -94.8977047294949,
+        -21.75091952988032
+      ]
+    },
+    "workflowRendererVersion": "LG",
+    "frontendVersion": "1.45.19",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true,
+    "ue_links": [],
+    "links_added_by_ue": [],
+    "qgn_navigation_groups": [
+      {
+        "id": "qgn_1767333881501_q5zxounsl",
+        "groupName": "🌟底模加载区",
+        "shortcutKey": "1",
+        "zoomScale": 135,
+        "order": 0
+      },
+      {
+        "id": "qgn_1767333884329_1ver8j1r0",
+        "groupName": "🌟Lora加载区",
+        "shortcutKey": "2",
+        "zoomScale": 100,
+        "order": 1
+      },
+      {
+        "id": "qgn_1767333885645_dd38ejq78",
+        "groupName": "🌟分辨率/批次大小设置/提示词编写区",
+        "shortcutKey": "3",
+        "zoomScale": 100,
+        "order": 2
+      },
+      {
+        "id": "qgn_1767333896551_0ekmkbyd3",
+        "groupName": "📌组管理区",
+        "shortcutKey": "4",
+        "zoomScale": 100,
+        "order": 3
+      },
+      {
+        "id": "qgn_1767333900355_ob9j6r9t6",
+        "groupName": "【↔️图像对比】总开关",
+        "shortcutKey": "5",
+        "zoomScale": 120,
+        "order": 4
+      },
+      {
+        "id": "qgn_1767333906878_kwc65r005",
+        "groupName": "⚙️文生图参数控制区",
+        "shortcutKey": "6",
+        "zoomScale": 180,
+        "order": 5
+      },
+      {
+        "id": "qgn_1767333918583_ibe8ehjgr",
+        "groupName": "【📦文生图可选】D站画廊",
+        "shortcutKey": "7",
+        "zoomScale": 100,
+        "order": 6
+      },
+      {
+        "id": "qgn_1767333935768_fmce38617",
+        "groupName": "【📦文生图可选】底图控制网SDXL",
+        "shortcutKey": "8",
+        "zoomScale": 100,
+        "order": 7
+      },
+      {
+        "id": "qgn_1767333939135_kq788oyz2",
+        "groupName": "【📦文生图可选】底图控制网Z-Image",
+        "shortcutKey": "9",
+        "zoomScale": 100,
+        "order": 8
+      }
+    ],
+    "qgn_locked": true,
+    "favoritedWidgets": {
+      "favorites": [
+        {
+          "nodeLocatorId": "58",
+          "widgetName": "$$canvas-image-preview"
+        }
+      ]
+    }
+  },
+  "version": 0.4,
+  "seed_widgets": {
+    "19": 0
+  }
+}
