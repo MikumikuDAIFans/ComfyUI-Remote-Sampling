@@ -107,6 +107,7 @@ Remote_Sampling_local(positive, negative, latent_image, seed, steps, cfg, sample
 - 每个 KSampler 会获得独立的 `generated/<profile_name>`。
 - 无 LoRA 的原始 model 链生成无 LoRA profile。
 - 有 LoRA 的原始 model 链按原顺序写入远端 profile。
+- 生成的 profile 会记录 `conversion_source.source_prompt_sha256`，用于追踪 profile 对应的源 API prompt。
 - 这避免了旧版转换器把所有工作流都固定映射到 `anima_qwen_aella_xcn` 的问题。
 
 转换后审计：
@@ -224,6 +225,19 @@ error.type / error.message / error.action_hint
 ### 已修复问题
 #### 固定 profile 污染
 旧版转换器默认把所有 KSampler 都映射到 `anima_qwen_aella_xcn`，即使原始 workflow 是 base-only，也会在远端强行加载 Aella/xcn LoRA。现在默认 `--remote-profile auto`，由原始 model 链决定远端 profile；显式指定 `anima_qwen_aella_xcn` 时默认会失败，必须加 `--allow-fixed-profile` 才能作为调试流使用。
+
+运行时也有第二道保护：`Remote_Sampling_local` 默认拒绝 fixed profile `anima_qwen_aella_xcn`。这意味着即使用户误打开历史 converted workflow，任务也会在上传 latent 前失败，并给出重新 auto 转换的提示。只有在节点上显式启用 `allow_fixed_profile` 时，才允许执行该固定 profile。
+
+每个 job 会记录对齐指纹：
+
+```text
+runtime_alignment.local_prompt_sha256
+runtime_alignment.profile_sha256
+runtime_alignment.remote_prompt_sha256
+runtime_alignment.remote_prompt_rebuilt_per_job
+```
+
+其中 `remote_prompt_rebuilt_per_job: true` 表示远端 latent-only prompt 是本次 job 重新生成并上传，不是复用旧远端 workflow。
 
 已冻结审计报告：
 

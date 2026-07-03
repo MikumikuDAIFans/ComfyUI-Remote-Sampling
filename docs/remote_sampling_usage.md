@@ -44,6 +44,8 @@ timeout_sec: 3600
 
 注意：`anima_qwen_aella_xcn` 是固定调试 profile，会加载 Aella 角色 LoRA 和 xcn 画风 LoRA。正式把本地 workflow 转为远端采样时，不要手工套用这个 profile，除非原始本地 workflow 本来就应使用同一组 LoRA。
 
+节点运行时也会保护你：`Remote_Sampling_local` 默认拒绝 `anima_qwen_aella_xcn` 这类 fixed profile，旧 workflow 会在上传 latent 前失败。只有确认本次运行确实要使用这个固定 profile 时，才把节点的 `allow_fixed_profile` 设为 `true`。
+
 5. 结束后停止远端服务：
 
 ```powershell
@@ -62,6 +64,7 @@ python F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py 
 - 原 workflow 使用 `LoraLoader` 或 `Lora Loader (LoraManager)` 时，会把激活 LoRA、模型强度、CLIP 强度写入 `ComfyUI-Remote-Sampling\profiles\generated\*.json`。
 - 不再建议对转换脚本手动指定固定 profile，除非你明确知道该 workflow 应该套用哪组远端模型/LoRA。
 - 如果显式指定 `--remote-profile anima_qwen_aella_xcn`，转换器默认会拒绝，以避免无 LoRA workflow 被污染。只有调试或演示时确认需要该固定 profile，才加 `--allow-fixed-profile`。
+- 自动生成的 profile 会记录 `conversion_source.source_prompt_sha256`，用于追踪它来自哪一次本地 API prompt。
 
 如果原 workflow 的 `CLIPTextEncode.clip` 来自 LoRA Loader 或 LoRA Manager，使用：
 
@@ -185,6 +188,10 @@ local.metrics.preflight
 local.metrics.upload
 local.metrics.sampling
 local.metrics.download
+runtime_alignment.local_prompt_sha256
+runtime_alignment.profile_sha256
+runtime_alignment.remote_prompt_sha256
+runtime_alignment.remote_prompt_rebuilt_per_job
 ```
 
 可以用审计工具检查任意 job：
@@ -194,6 +201,12 @@ python F:\TieguoDun\Remote_comfyui\tools\audit_remote_sampling_workflow.py --job
 ```
 
 它会展开 `remote_profile`、UNET、CLIP、LoRA、LoRA strength、远端 prompt class list、是否存在 forbidden image nodes，以及 fixed profile 污染 warning。
+
+`runtime_alignment` 字段用于证明本次运行的对齐关系：
+- `local_prompt_sha256`: 本次本地 ComfyUI prompt 的指纹。
+- `profile_sha256`: 本次使用的 profile 文件指纹。
+- `remote_prompt_sha256`: 本次重新生成并上传到远端的 latent-only prompt 指纹。
+- `remote_prompt_rebuilt_per_job: true`: 远端 prompt 不是复用旧文件，而是每个 job 重新生成。
 
 `result.json` 会记录：
 

@@ -182,6 +182,7 @@ def audit_job(path: Path) -> dict[str, Any]:
         "job_json": str(job_path),
         "remote_profile": profile_name or None,
         "profile": profile,
+        "runtime_alignment": job.get("runtime_alignment") if isinstance(job.get("runtime_alignment"), dict) else {},
         "remote_prompt_class_list": classes,
         "remote_lora_loader_count": sum(1 for item in classes if item == "LoraLoader"),
         "forbidden_image_nodes": forbidden_image_nodes,
@@ -240,6 +241,12 @@ def format_human(report: dict[str, Any]) -> str:
         lines.append(f"  Remote classes: {', '.join(report.get('remote_prompt_class_list') or [])}")
         lines.append(f"  Remote LoraLoader count: {report.get('remote_lora_loader_count')}")
         lines.append(f"  Forbidden image nodes: {report.get('forbidden_image_nodes')}")
+        alignment = report.get("runtime_alignment") or {}
+        if alignment:
+            lines.append(f"  Local prompt sha256: {alignment.get('local_prompt_sha256')}")
+            lines.append(f"  Profile sha256: {alignment.get('profile_sha256')}")
+            lines.append(f"  Remote prompt sha256: {alignment.get('remote_prompt_sha256')}")
+            lines.append(f"  Remote prompt rebuilt per job: {alignment.get('remote_prompt_rebuilt_per_job')}")
         lines.append(f"  status.json exists: {report.get('status_exists')}")
         lines.append(f"  result.json exists: {report.get('result_exists')}")
     elif report["kind"] == "profile":

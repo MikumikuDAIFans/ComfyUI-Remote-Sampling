@@ -594,15 +594,25 @@ def enrich_job_manifest(
     with job_path.open("r", encoding="utf-8") as f:
         manifest = json.load(f)
     manifest["profile"] = profile_summary(profile, config, path)
+    manifest["profile"]["file"] = protocol.file_info(path)
     manifest["remote"] = {
         "base": REMOTE_BASE,
         "comfy": REMOTE_COMFY,
         "job_dir": remote_job_dir,
         "prompt": remote_prompt,
+        "prompt_sha256": protocol.json_sha256(prompt),
         "job_root": REMOTE_JOB_ROOT,
         "prompt_class_list": classes,
         "forbidden_image_nodes": sorted(set(classes) & FORBIDDEN_REMOTE_IMAGE_NODES),
     }
+    manifest.setdefault("runtime_alignment", {})
+    manifest["runtime_alignment"].update(
+        {
+            "profile_sha256": manifest["profile"]["file"]["sha256"],
+            "remote_prompt_sha256": manifest["remote"]["prompt_sha256"],
+            "remote_prompt_rebuilt_per_job": True,
+        }
+    )
     with job_path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2)
         f.write("\n")

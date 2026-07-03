@@ -207,6 +207,14 @@ def file_info(path: Path) -> dict[str, Any]:
     return {"size": path.stat().st_size, "sha256": digest.hexdigest()}
 
 
+def canonical_json_bytes(data: Any) -> bytes:
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def json_sha256(data: Any) -> str:
+    return hashlib.sha256(canonical_json_bytes(data)).hexdigest()
+
+
 def save_inputs(path: Path, latent: Any, positive: Any, negative: Any) -> None:
     import torch
 

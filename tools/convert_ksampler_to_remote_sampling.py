@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -53,6 +54,12 @@ def write_json(path: Path, data: dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
+
+
+def json_sha256(data: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def profile_path(profile_name: str) -> Path:
@@ -326,6 +333,11 @@ def write_generated_profile(
     profile = {
         "name": relative_profile,
         "description": f"Auto-generated from {output_path.name}, KSampler node {sampler_node_id}.",
+        "conversion_source": {
+            "output_workflow": str(output_path),
+            "sampler_node_id": sampler_node_id,
+            "source_prompt_sha256": json_sha256(prompt),
+        },
         "unet": unet,
         "clip": clip,
         "loras": loras,

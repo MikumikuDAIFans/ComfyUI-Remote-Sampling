@@ -18,6 +18,7 @@ from ..protocol import (
     build_job_manifest,
     file_info,
     init_status,
+    json_sha256,
     load_output,
     make_run_id,
     read_json,
@@ -36,6 +37,16 @@ DEFAULT_BRIDGE_PYTHON = os.environ.get("REMOTE_SAMPLING_BRIDGE_PYTHON", r"C:\Pyt
 AUDITED_JOB_FILES = ("inputs.pt", "output.pt", "result.json", "status.json", "events.jsonl", "remote_sampling_report.txt")
 PROGRESS_PREFIX = "RS_PROGRESS "
 PANEL_EVENT = "remote_sampling_progress"
+FIXED_PROFILE_WARN_LIST = {"anima_qwen_aella_xcn"}
+
+
+def profile_id(profile_name: str) -> str:
+    normalized = profile_name.replace("\\", "/")
+    return Path(normalized).with_suffix("").name
+
+
+def is_fixed_profile(profile_name: str) -> bool:
+    return profile_id(profile_name) in FIXED_PROFILE_WARN_LIST
 
 
 def latent_pixel_size(latent_image) -> tuple[int | None, int | None]:
@@ -207,9 +218,11 @@ class RemoteSamplingLocal:
             },
             "optional": {
                 "sampler_id": ("STRING", {"default": ""}),
+                "allow_fixed_profile": ("BOOLEAN", {"default": False}),
             },
             "hidden": {
                 "unique_id": "UNIQUE_ID",
+                "prompt": "PROMPT",
             },
         }
 
@@ -234,7 +247,9 @@ class RemoteSamplingLocal:
         python_executable,
         timeout_sec,
         sampler_id="",
+        allow_fixed_profile=False,
         unique_id=None,
+        prompt=None,
     ):
         root = Path(project_root)
         run_id = make_run_id("remote_sampling")
@@ -265,10 +280,53 @@ class RemoteSamplingLocal:
             scheduler=scheduler,
             denoise=denoise,
         )
+        manifest["runtime_alignment"] = {
+            "local_prompt_sha256": json_sha256(prompt) if prompt is not None else None,
+            "local_node_id": str(unique_id) if unique_id is not None else None,
+            "remote_profile": remote_profile,
+            "remote_profile_id": profile_id(remote_profile),
+            "fixed_profile": is_fixed_profile(remote_profile),
+            "allow_fixed_profile": bool(allow_fixed_profile),
+            "alignment_note": "Remote prompt is rebuilt and uploaded for every job from this runtime profile.",
+        }
         warnings = quality_warnings(latent_image, int(steps))
         if warnings:
             manifest["quality_warnings"] = warnings
         write_json(job_dir / "job.json", manifest)
+
+        if is_fixed_profile(remote_profile) and not allow_fixed_profile:
+            message = (
+                f"Refusing fixed remote profile '{remote_profile}'. This profile loads Aella/xcn LoRA and can "
+                "pollute old converted workflows. Re-convert the original API prompt with "
+                "`--remote-profile auto`, or set allow_fixed_profile=true only when this exact profile is intended."
+            )
+            update_status(
+                job_dir,
+                stage="failed",
+                message="Fixed remote profile refused",
+                overall_percent=100,
+                error={
+                    "type": "FixedRemoteProfileRefused",
+                    "message": message,
+                    "action_hint": (
+                        "Run tools/convert_ksampler_to_remote_sampling.py <input_api.json> <output_api.json> "
+                        "--remote-profile auto, then reload the converted workflow."
+                    ),
+                },
+            )
+            send_panel_event(
+                unique_id,
+                job_id,
+                {
+                    "event": "failed",
+                    "stage": "failed",
+                    "message": "Fixed remote profile refused",
+                    "overall_percent": 100,
+                },
+            )
+            write_report(job_dir)
+            raise RuntimeError(message)
+
         save_inputs(job_dir / "inputs.pt", latent_image, positive, negative)
         update_status(job_dir, stage="preparing", message="Serialized latent and conditioning", overall_percent=5)
 
