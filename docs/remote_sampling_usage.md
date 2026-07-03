@@ -31,7 +31,31 @@ http://127.0.0.1:8188
 Remote_Sampling_local
 ```
 
-4. 在本地 workflow 中使用 `Remote_Sampling_local` 替代普通 `KSampler`。
+4. 推荐正式入口：在本地 ComfyUI 打开原始 workflow 后，使用右下角 `Remote Sampling` 面板里的 `Run Current Workflow`。
+
+这个入口会从当前画布生成 API prompt，调用本地 `/remote_sampling/convert`，即时转换并审计，然后把 converted prompt 提交到 ComfyUI 队列。每次运行都会生成新的 run bundle：
+
+```text
+F:\TieguoDun\Remote_comfyui\runs\runtime_<timestamp>_<id>
+```
+
+bundle 中包含：
+
+```text
+source_prompt.json
+source_workflow.json
+converted_prompt.json
+profiles\<node>_<profile>.json
+manifest.json
+audit.json
+audit.txt
+```
+
+`manifest.json` 会记录 `source_prompt_sha256`、`converted_prompt_sha256`、profile snapshot SHA256、转换器版本和策略版本。正式运行不再建议手动打开历史 `workflows\runs\*.json`。
+
+缓存策略：当前版本默认每次运行重新转换。后续如果启用缓存，cache key 必须至少包含 source prompt SHA256、converter version、policy version、custom node version 和 model/LoRA chain summary hash；任何字段不一致都必须重新转换。
+
+5. 手写或调试时，也可以在本地 workflow 中直接使用 `Remote_Sampling_local` 替代普通 `KSampler`。
 
 手写调试时常用参数：
 
@@ -46,13 +70,15 @@ timeout_sec: 3600
 
 节点运行时也会保护你：`Remote_Sampling_local` 默认拒绝 `anima_qwen_aella_xcn` 这类 fixed profile，旧 workflow 会在上传 latent 前失败。只有确认本次运行确实要使用这个固定 profile 时，才把节点的 `allow_fixed_profile` 设为 `true`。
 
-5. 结束后停止远端服务：
+6. 结束后停止远端服务：
 
 ```powershell
 python F:\TieguoDun\Remote_comfyui\tools\remote_comfy_service.py stop
 ```
 
 ### 转换已有 API workflow
+日常优先使用前端 `Run Current Workflow`。下面的 CLI 仍保留给调试、批处理和回归验证。
+
 基础转换：
 
 ```powershell
@@ -202,11 +228,18 @@ python F:\TieguoDun\Remote_comfyui\tools\audit_remote_sampling_workflow.py --job
 
 它会展开 `remote_profile`、UNET、CLIP、LoRA、LoRA strength、远端 prompt class list、是否存在 forbidden image nodes，以及 fixed profile 污染 warning。
 
+也可以审计 runtime run bundle：
+
+```powershell
+python F:\TieguoDun\Remote_comfyui\tools\audit_remote_sampling_workflow.py --bundle F:\TieguoDun\Remote_comfyui\runs\<runtime_run_dir>
+```
+
 `runtime_alignment` 字段用于证明本次运行的对齐关系：
 - `local_prompt_sha256`: 本次本地 ComfyUI prompt 的指纹。
 - `profile_sha256`: 本次使用的 profile 文件指纹。
 - `remote_prompt_sha256`: 本次重新生成并上传到远端的 latent-only prompt 指纹。
 - `remote_prompt_rebuilt_per_job: true`: 远端 prompt 不是复用旧文件，而是每个 job 重新生成。
+- `runtime_bundle_id` / `runtime_bundle_dir`: 本次 job 对应的运行时转换 bundle。
 
 `result.json` 会记录：
 

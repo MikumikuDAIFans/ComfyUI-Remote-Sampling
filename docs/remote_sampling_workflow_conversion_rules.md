@@ -36,6 +36,10 @@
 - 任意前端 workflow JSON 的完整自动转换；当前转换器处理的是 ComfyUI API prompt。
 
 ### 转换脚本
+正式交互式使用优先通过 ComfyUI 前端右下角 `Remote Sampling` 面板的 `Run Current Workflow` 入口运行。该入口会对当前画布即时生成 API prompt、转换、审计、生成 run bundle 并提交 converted prompt，避免用户误打开历史 converted workflow。
+
+CLI 转换脚本仍用于调试、批处理和回归验证。
+
 脚本：
 
 ```powershell
@@ -161,6 +165,20 @@ LoRA:
 F:\TieguoDun\Remote_comfyui\ComfyUI-Remote-Sampling\profiles\generated
 ```
 
+运行时转换入口会把本次 profile 复制为 run-local snapshot：
+
+```text
+F:\TieguoDun\Remote_comfyui\runs\runtime_<timestamp>_<id>\profiles\<node>_<profile>.json
+```
+
+converted prompt 中的 `remote_profile` 会指向该 snapshot 文件，因此正式运行不依赖历史 global generated profile 文件。
+
+缓存策略：
+- 当前版本默认每次运行重新转换。
+- 后续缓存只能作为优化，必须 fail-closed。
+- cache key 至少包含 `source_prompt_sha256`、`converter_version`、`policy_version`、custom node version 和 model/LoRA chain summary hash。
+- 任一字段不一致时必须重新转换，不能复用旧 converted prompt 或旧 profile。
+
 远端 prompt 允许节点：
 - `UNETLoader`
 - `CLIPLoader`
@@ -235,6 +253,8 @@ runtime_alignment.local_prompt_sha256
 runtime_alignment.profile_sha256
 runtime_alignment.remote_prompt_sha256
 runtime_alignment.remote_prompt_rebuilt_per_job
+runtime_alignment.runtime_bundle_id
+runtime_alignment.runtime_bundle_dir
 ```
 
 其中 `remote_prompt_rebuilt_per_job: true` 表示远端 latent-only prompt 是本次 job 重新生成并上传，不是复用旧远端 workflow。

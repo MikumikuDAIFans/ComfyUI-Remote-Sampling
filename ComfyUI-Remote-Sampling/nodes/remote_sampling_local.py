@@ -49,6 +49,20 @@ def is_fixed_profile(profile_name: str) -> bool:
     return profile_id(profile_name) in FIXED_PROFILE_WARN_LIST
 
 
+def runtime_bundle_info(remote_profile: str) -> dict[str, str | None]:
+    path = Path(remote_profile)
+    parts = list(path.parts)
+    for index, part in enumerate(parts):
+        if part == "runs" and index + 1 < len(parts):
+            run_id = parts[index + 1]
+            if run_id.startswith("runtime_"):
+                return {
+                    "runtime_bundle_id": run_id,
+                    "runtime_bundle_dir": str(Path(*parts[: index + 2])),
+                }
+    return {"runtime_bundle_id": None, "runtime_bundle_dir": None}
+
+
 def latent_pixel_size(latent_image) -> tuple[int | None, int | None]:
     samples = latent_image.get("samples") if isinstance(latent_image, dict) else None
     shape = getattr(samples, "shape", None)
@@ -288,6 +302,7 @@ class RemoteSamplingLocal:
             "fixed_profile": is_fixed_profile(remote_profile),
             "allow_fixed_profile": bool(allow_fixed_profile),
             "alignment_note": "Remote prompt is rebuilt and uploaded for every job from this runtime profile.",
+            **runtime_bundle_info(remote_profile),
         }
         warnings = quality_warnings(latent_image, int(steps))
         if warnings:

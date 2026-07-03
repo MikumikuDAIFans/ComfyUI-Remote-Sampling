@@ -193,6 +193,32 @@ def audit_job(path: Path) -> dict[str, Any]:
     }
 
 
+def audit_bundle(path: Path) -> dict[str, Any]:
+    bundle_dir = path
+    manifest_path = bundle_dir / "manifest.json"
+    audit_path = bundle_dir / "audit.json"
+    manifest = read_json(manifest_path)
+    audit = read_json(audit_path) if audit_path.is_file() else {}
+    profiles = manifest.get("profile_snapshots", [])
+    warnings = list(manifest.get("warnings", []))
+    errors = list(manifest.get("errors", []))
+    if not manifest.get("ok"):
+        errors.append(manifest.get("error", {}).get("message", "bundle conversion failed"))
+    return {
+        "kind": "bundle",
+        "run_id": manifest.get("run_id") or bundle_dir.name,
+        "run_dir": str(bundle_dir),
+        "manifest": str(manifest_path),
+        "source_prompt_sha256": manifest.get("source_prompt_sha256"),
+        "converted_prompt_sha256": manifest.get("converted_prompt_sha256"),
+        "profile_snapshots": profiles,
+        "converted_node_ids": manifest.get("converted_node_ids", []),
+        "audit": audit,
+        "warnings": warnings,
+        "errors": errors,
+    }
+
+
 def format_loras(loras: list[dict[str, Any]]) -> list[str]:
     if not loras:
         return ["    LoRA: none"]
@@ -243,12 +269,28 @@ def format_human(report: dict[str, Any]) -> str:
         lines.append(f"  Forbidden image nodes: {report.get('forbidden_image_nodes')}")
         alignment = report.get("runtime_alignment") or {}
         if alignment:
+            lines.append(f"  Runtime bundle id: {alignment.get('runtime_bundle_id')}")
+            lines.append(f"  Runtime bundle dir: {alignment.get('runtime_bundle_dir')}")
             lines.append(f"  Local prompt sha256: {alignment.get('local_prompt_sha256')}")
             lines.append(f"  Profile sha256: {alignment.get('profile_sha256')}")
             lines.append(f"  Remote prompt sha256: {alignment.get('remote_prompt_sha256')}")
             lines.append(f"  Remote prompt rebuilt per job: {alignment.get('remote_prompt_rebuilt_per_job')}")
         lines.append(f"  status.json exists: {report.get('status_exists')}")
         lines.append(f"  result.json exists: {report.get('result_exists')}")
+    elif report["kind"] == "bundle":
+        lines.append(f"Run: {report.get('run_id')}")
+        lines.append(f"Dir: {report.get('run_dir')}")
+        lines.append(f"Source prompt sha256: {report.get('source_prompt_sha256')}")
+        lines.append(f"Converted prompt sha256: {report.get('converted_prompt_sha256')}")
+        for profile in report.get("profile_snapshots", []):
+            lines.append("")
+            lines.append(f"Node {profile.get('node')}")
+            lines.append(f"  Snapshot profile: {profile.get('snapshot_profile')}")
+            lines.append(f"  LoRA count: {profile.get('lora_count')}")
+            for lora in profile.get("loras", []):
+                lines.append(
+                    f"    - {lora.get('lora_name')} (model={lora.get('strength_model')}, clip={lora.get('strength_clip')})"
+                )
     elif report["kind"] == "profile":
         lines.extend(format_profile_block(report["profile"]))
     if report.get("warnings"):
@@ -272,6 +314,7 @@ def parse_args() -> argparse.Namespace:
     group.add_argument("--workflow", type=Path, help="Converted ComfyUI API prompt JSON to audit.")
     group.add_argument("--job", type=Path, help="Remote sampling job directory or job.json to audit.")
     group.add_argument("--profile", help="Profile name or profile JSON path to audit.")
+    group.add_argument("--bundle", type=Path, help="Runtime conversion run bundle directory to audit.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     return parser.parse_args()
 
@@ -282,6 +325,8 @@ def main() -> int:
         report = audit_workflow(args.workflow)
     elif args.job:
         report = audit_job(args.job)
+    elif args.bundle:
+        report = audit_bundle(args.bundle)
     else:
         report = audit_profile(args.profile)
     if args.json:

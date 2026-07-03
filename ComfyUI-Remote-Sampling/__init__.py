@@ -6,6 +6,7 @@ from server import PromptServer
 from .nodes.remote_sampling_local import RemoteSamplingLocal
 from .nodes.remote_sampling_remote import RemoteSamplingRemote
 from .protocol import read_json
+from .runtime_conversion import CONVERTER_VERSION, POLICY_VERSION, convert_runtime_prompt
 
 
 NODE_CLASS_MAPPINGS = {
@@ -78,3 +79,48 @@ async def remote_sampling_status(request):
         {"ok": True, "job_dir": str(job_dir), "status": status},
         headers={"Cache-Control": "no-store"},
     )
+
+
+@PromptServer.instance.routes.get("/remote_sampling/runtime/status")
+async def remote_sampling_runtime_status(request):
+    return web.json_response(
+        {
+            "ok": True,
+            "version": CONVERTER_VERSION,
+            "policy_version": POLICY_VERSION,
+            "capabilities": {
+                "convert": True,
+                "convert_and_queue": True,
+                "queue_mode": "frontend_converts_then_posts_converted_prompt",
+                "expects_api_prompt": True,
+                "accepts_frontend_workflow_snapshot": True,
+                "default_remote_profile": "auto",
+                "fixed_profiles_fail_closed": True,
+                "remote_prompt_rebuilt_per_job": True,
+            },
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@PromptServer.instance.routes.post("/remote_sampling/convert")
+async def remote_sampling_runtime_convert(request):
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise TypeError("JSON body must be an object")
+        result = convert_runtime_prompt(payload)
+        status = 200 if result.get("ok") else 400
+        return web.json_response(result, status=status, headers={"Cache-Control": "no-store"})
+    except Exception as error:
+        return web.json_response(
+            {
+                "ok": False,
+                "error": {
+                    "type": error.__class__.__name__,
+                    "message": str(error),
+                },
+            },
+            status=500,
+            headers={"Cache-Control": "no-store"},
+        )
