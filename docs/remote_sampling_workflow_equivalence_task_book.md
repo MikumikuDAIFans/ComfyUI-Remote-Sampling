@@ -5,7 +5,7 @@
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_sampling_workflow_equivalence_task_book.md`
 - Related handoff file: none
 - Current branch: main
-- Current active phase: Phase 1: 证据审计与污染范围冻结
+- Current active phase: completed
 - Execution readiness: executing
 
 ## 目标
@@ -184,15 +184,15 @@
 - Phase 2: completed
 - Phase 3: completed
 - Phase 4: completed
-- Phase 5: in progress
-- Validation status: 已完成 base-only 与 LoRA auto converted workflow 的真实 remote sampling 回归；远端 job/output 目录无图片文件；正在进行发布前 review、commit、push。
+- Phase 5: completed
+- Validation status: 已完成 base-only 与 LoRA auto converted workflow 的真实 remote sampling 回归；远端 job/output 目录无图片文件；已完成 review、commit、push。
 - Residual risks:
   - 历史测试 workflow 大量固定使用 `anima_qwen_aella_xcn`，后续实测容易继续误用。
   - 当前 auto 转换只支持有限模型链，复杂 loader 仍可能无法等价转换。
   - 如果用户提供的是前端 workflow JSON，需要先导出/提取 API prompt，不能直接套当前转换器。
 
 ## 下一步动作
-Phase 5：最终 review、commit、push，并确认 GitHub remote head。
+当前任务已完成；后续可继续扩展更复杂 model chain、ControlNet/IPAdapter 转换支持或节点 UI 中的 profile 资源预览。
 
 ## 执行日志
 - 2026-07-04 01:20 +08:00: Execution readiness 更新为 `executing`。
@@ -200,3 +200,4 @@ Phase 5：最终 review、commit、push，并确认 GitHub remote head。
 - 2026-07-04 01:39 +08:00: Phase 2 完成，新增 `tools/audit_remote_sampling_workflow.py` 和样例报告 `docs/reports/remote_sampling_audit_tool_samples_20260704.md`。工具已验证 fixed workflow warning、auto base empty loras、最新污染 job 两个 LoRA 展开。
 - 2026-07-04 01:45 +08:00: Phase 3 完成，`tools/convert_ksampler_to_remote_sampling.py` 默认拒绝 fixed profile `anima_qwen_aella_xcn`，除非显式 `--allow-fixed-profile`；转换 summary 输出每个 sampler 的 generated profile、LoRA 数量、LoRA 名称和 fixed profile 标记。已重转 `equivalence_base_auto_20260704_api.json` 与 `equivalence_lora_auto_20260704_api.json`，base profile `loras: []`，LoRA profile exactly 包含 Aella/xcn 两个原始 LoRA。
 - 2026-07-04 01:58 +08:00: Phase 4 完成。本地 8188 成功提交 base smoke `45313c6d-7b34-4537-b431-9d28bcb69710`，job `remote_sampling_20260704_012420_6c185c77_equivalence_base_smoke_202660704_012420`，远端 prompt classes 为 `UNETLoader, CLIPLoader, Remote_Sampling_remote`，`LoraLoader` 数量 0，采样 `4/4`。本地 8188 成功提交 LoRA smoke `d4b91150-f22e-464a-a159-ae89e8f8304c`，job `remote_sampling_20260704_012525_2b87f6ee_equivalence_lora_smoke_202660704_012524`，远端 prompt classes 为 `UNETLoader, CLIPLoader, LoraLoader, LoraLoader, Remote_Sampling_remote`，采样 `8/8`。使用 company-lab-2-server 检查两个远端 job 目录及远端 `ComfyUI/output` 近 60 分钟图片输出，均无 PNG/JPG/JPEG/WEBP。custom node 包已同步到本地 ComfyUI 和远端 `/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling`。
+- 2026-07-04 02:08 +08:00: Phase 5 完成。`python -m py_compile tools\audit_remote_sampling_workflow.py tools\convert_ksampler_to_remote_sampling.py` 通过，`git diff --check` 通过。提交 `9a3a6b5 Add workflow profile equivalence audit` 已推送到 GitHub，远端 head 确认为 `9a3a6b5a8357be3959750545d7d2cfd457736520 refs/heads/main`。
