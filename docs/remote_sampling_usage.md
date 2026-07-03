@@ -202,7 +202,20 @@ download.bytes_total / download.bytes_done / download.mbps
 error.type / error.message / error.action_hint
 ```
 
-`Remote_Sampling_local` 执行完成后会通过 ComfyUI `ui.text` 返回 `remote_sampling_report.txt` 的摘要；如果前端没有显示该文本，可直接打开 job 目录中的 report 文件。
+`Remote_Sampling_local` 节点内置实时面板。执行中可以直接在节点内部看到：
+
+```text
+overall progress
+preflight / upload / sampling / download progress
+upload speed
+remote sampling step / elapsed / sec_per_step
+download speed
+total elapsed
+```
+
+面板由 `ComfyUI-Remote-Sampling/web/remote_sampling_panel.js` 提供，ComfyUI 重启后会通过 `WEB_DIRECTORY` 自动加载。面板会同时接收 websocket progress 事件，并每秒通过本地 `/remote_sampling/status` 读取 `jobs/<job>/status.json` 作为兜底刷新来源；因此即使右侧详情面板没有重新点击，画布节点内的进度也应持续更新。
+
+当前 ComfyUI 前端对 canvas custom widget 存在缓存行为，扩展会在状态更新时对节点尺寸做约 1px 的不可感知刷新，以强制画布重绘。后端仍会保留原有审计文件；执行完成后也会通过 ComfyUI `ui.text` 返回 `remote_sampling_report.txt` 的摘要。如果前端没有显示该文本，可直接打开 job 目录中的 report 文件。
 
 ### 资源 preflight
 `remote_sampling_job_cli.py` 默认会在上传 `inputs.pt` 前检查远端资源。检查范围来自当前 `remote_profile`：

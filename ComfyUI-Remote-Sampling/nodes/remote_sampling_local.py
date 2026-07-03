@@ -12,6 +12,7 @@ from typing import Any
 
 import comfy.samplers
 import comfy.utils
+from server import PromptServer
 
 from ..protocol import (
     build_job_manifest,
@@ -34,6 +35,7 @@ DEFAULT_PROJECT_ROOT = Path(os.environ.get("REMOTE_SAMPLING_PROJECT_ROOT", r"F:\
 DEFAULT_BRIDGE_PYTHON = os.environ.get("REMOTE_SAMPLING_BRIDGE_PYTHON", r"C:\Python314\python.exe")
 AUDITED_JOB_FILES = ("inputs.pt", "output.pt", "result.json", "status.json", "events.jsonl", "remote_sampling_report.txt")
 PROGRESS_PREFIX = "RS_PROGRESS "
+PANEL_EVENT = "remote_sampling_progress"
 
 
 def latent_pixel_size(latent_image) -> tuple[int | None, int | None]:
@@ -96,7 +98,29 @@ def read_pipe(pipe, stream_name: str, output: queue.Queue[tuple[str, str | None]
         output.put((stream_name, None))
 
 
-def run_bridge(cmd: list[str], cwd: Path, timeout_sec: int, job_dir: Path) -> tuple[int, str, str]:
+def send_panel_event(node_id: str | None, job_id: str, payload: dict[str, Any]) -> None:
+    if not node_id:
+        return
+    data = {
+        "node": str(node_id),
+        "job_id": job_id,
+        **payload,
+    }
+    try:
+        PromptServer.instance.send_sync(PANEL_EVENT, data, PromptServer.instance.client_id)
+    except Exception:
+        pass
+
+
+def run_bridge(
+    cmd: list[str],
+    cwd: Path,
+    timeout_sec: int,
+    job_dir: Path,
+    *,
+    node_id: str | None = None,
+    job_id: str = "",
+) -> tuple[int, str, str]:
     completed = subprocess.Popen(
         cmd,
         cwd=str(cwd),
@@ -151,6 +175,7 @@ def run_bridge(cmd: list[str], cwd: Path, timeout_sec: int, job_dir: Path) -> tu
             if line.startswith(PROGRESS_PREFIX):
                 try:
                     event = json.loads(line[len(PROGRESS_PREFIX) :])
+                    send_panel_event(node_id, job_id, event)
                     percent = event.get("overall_percent")
                     if percent is not None:
                         pbar.update_absolute(int(max(0, min(100, float(percent)))), 100)
@@ -183,6 +208,9 @@ class RemoteSamplingLocal:
             "optional": {
                 "sampler_id": ("STRING", {"default": ""}),
             },
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+            },
         }
 
     RETURN_TYPES = ("LATENT",)
@@ -206,6 +234,7 @@ class RemoteSamplingLocal:
         python_executable,
         timeout_sec,
         sampler_id="",
+        unique_id=None,
     ):
         root = Path(project_root)
         run_id = make_run_id("remote_sampling")
@@ -214,6 +243,16 @@ class RemoteSamplingLocal:
         job_dir = root / "jobs" / job_id
         job_dir.mkdir(parents=True, exist_ok=True)
         init_status(job_dir, job_id=job_id, stage="preparing", message="Preparing remote sampling job")
+        send_panel_event(
+            unique_id,
+            job_id,
+            {
+                "event": "preparing",
+                "stage": "preparing",
+                "message": "Preparing remote sampling job",
+                "overall_percent": 1,
+            },
+        )
 
         manifest = build_job_manifest(
             run_id=run_id,
@@ -244,9 +283,26 @@ class RemoteSamplingLocal:
             "--timeout",
             str(timeout_sec),
         ]
-        returncode, stdout, stderr = run_bridge(cmd, root, timeout_sec, job_dir)
+        returncode, stdout, stderr = run_bridge(
+            cmd,
+            root,
+            timeout_sec,
+            job_dir,
+            node_id=unique_id,
+            job_id=job_id,
+        )
         if returncode != 0:
             update_status(job_dir, stage="failed", message="Remote sampling bridge failed")
+            send_panel_event(
+                unique_id,
+                job_id,
+                {
+                    "event": "failed",
+                    "stage": "failed",
+                    "message": "Remote sampling bridge failed",
+                    "overall_percent": 100,
+                },
+            )
             write_report(job_dir)
             raise RuntimeError(
                 "Remote sampling job failed\n"
@@ -261,6 +317,16 @@ class RemoteSamplingLocal:
             raise FileNotFoundError(f"remote sampling did not produce {output_path}\nstdout:\n{stdout}")
         update_local_audit(job_dir, stdout, stderr)
         update_status(job_dir, stage="completed", message="Remote sampling complete", overall_percent=100)
+        send_panel_event(
+            unique_id,
+            job_id,
+            {
+                "event": "completed",
+                "stage": "completed",
+                "message": "Remote sampling complete",
+                "overall_percent": 100,
+            },
+        )
         report_path = write_report(job_dir)
         report_text = report_path.read_text(encoding="utf-8")
         return {"ui": {"text": [report_text]}, "result": (load_output(output_path),)}

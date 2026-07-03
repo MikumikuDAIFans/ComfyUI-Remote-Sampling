@@ -686,6 +686,35 @@ def read_remote_status(sftp: paramiko.SFTPClient, remote_job_dir: str) -> dict[s
         return None
 
 
+def remote_file_exists(sftp: paramiko.SFTPClient, remote_path: str) -> bool:
+    try:
+        sftp.stat(remote_path)
+        return True
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return False
+
+
+def read_remote_json(sftp: paramiko.SFTPClient, remote_path: str) -> dict[str, Any] | None:
+    try:
+        with sftp.file(remote_path, "r") as f:
+            return json.loads(f.read().decode("utf-8"))
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def remote_job_completed(sftp: paramiko.SFTPClient, remote_job_dir: str) -> bool:
+    result = read_remote_json(sftp, f"{remote_job_dir}/result.json")
+    if result is not None and result.get("ok") is False:
+        return False
+    status = read_remote_status(sftp, remote_job_dir) or {}
+    status_ok = status.get("stage") == "completed" or result is not None
+    return status_ok and remote_file_exists(sftp, f"{remote_job_dir}/output.pt")
+
+
 def merge_remote_status_into_local(sftp: paramiko.SFTPClient, remote_job_dir: str, local_job_dir: Path) -> None:
     remote_status = read_remote_status(sftp, remote_job_dir)
     if not remote_status:
@@ -795,8 +824,12 @@ def submit_remote_prompt(
         print(err, file=sys.stderr, end="")
     lines = [line for line in out.splitlines() if line.strip()]
     if not lines:
+        if remote_job_completed(sftp, remote_job_dir):
+            return
         raise RuntimeError("remote submit produced no output")
     result = json.loads(lines[-1])
+    if remote_job_completed(sftp, remote_job_dir):
+        return
     if code != 0 or not result.get("ok"):
         raise RuntimeError(f"remote sampling prompt failed: {json.dumps(result, ensure_ascii=False)[:4000]}")
 
@@ -934,13 +967,25 @@ def main() -> int:
         raise
     finally:
         if remote_pid is not None and not args.keep_remote and client is not None:
-            stop_remote_pid(client, remote_pid)
+            try:
+                stop_remote_pid(client, remote_pid)
+            except Exception as cleanup_exc:
+                print(f"warning: failed to stop remote pid {remote_pid}: {cleanup_exc}", file=sys.stderr)
         if remote_lock is not None and client is not None:
-            release_remote_service_lock(client, remote_lock)
+            try:
+                release_remote_service_lock(client, remote_lock)
+            except Exception as cleanup_exc:
+                print(f"warning: failed to release remote lock {remote_lock}: {cleanup_exc}", file=sys.stderr)
         if sftp is not None:
-            sftp.close()
+            try:
+                sftp.close()
+            except Exception:
+                pass
         if client is not None:
-            client.close()
+            try:
+                client.close()
+            except Exception:
+                pass
         if tunnel.poll() is None:
             tunnel.terminate()
             try:
