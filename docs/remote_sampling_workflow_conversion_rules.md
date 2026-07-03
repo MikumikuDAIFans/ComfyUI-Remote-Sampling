@@ -48,6 +48,27 @@ python F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py 
 python F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py <input_api.json> <output_api.json> --remote-profile auto --sampler-prefix <prefix>
 ```
 
+转换器会输出 `profile_summary`，其中包含每个 KSampler 对应的远端 profile、UNET、CLIP、LoRA 数量、LoRA 名称和 `is_fixed_profile` 标记。正式转换结果应优先使用 `generated/...` profile。
+
+固定 profile 防污染规则：
+
+```powershell
+python F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py `
+  <input_api.json> `
+  <output_api.json> `
+  --remote-profile anima_qwen_aella_xcn
+```
+
+默认会失败，因为 `anima_qwen_aella_xcn` 会加载 Aella/xcn LoRA。只有明确需要这个固定 profile 时才允许：
+
+```powershell
+python F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py `
+  <input_api.json> `
+  <output_api.json> `
+  --remote-profile anima_qwen_aella_xcn `
+  --allow-fixed-profile
+```
+
 常用真实工作流转换命令：
 
 ```powershell
@@ -87,6 +108,14 @@ Remote_Sampling_local(positive, negative, latent_image, seed, steps, cfg, sample
 - 无 LoRA 的原始 model 链生成无 LoRA profile。
 - 有 LoRA 的原始 model 链按原顺序写入远端 profile。
 - 这避免了旧版转换器把所有工作流都固定映射到 `anima_qwen_aella_xcn` 的问题。
+
+转换后审计：
+
+```powershell
+python F:\TieguoDun\Remote_comfyui\tools\audit_remote_sampling_workflow.py --workflow <output_api.json>
+```
+
+审计工具会展开每个 `Remote_Sampling_local.remote_profile` 的 UNET、CLIP、LoRA 和 LoRA strength；如果发现 fixed profile `anima_qwen_aella_xcn`，会给出高可见 warning。
 
 #### 2. 不可达节点裁剪
 转换后从输出节点反向追踪依赖，只保留可达节点。
@@ -194,7 +223,15 @@ error.type / error.message / error.action_hint
 
 ### 已修复问题
 #### 固定 profile 污染
-旧版转换器默认把所有 KSampler 都映射到 `anima_qwen_aella_xcn`，即使原始 workflow 是 base-only，也会在远端强行加载 Aella/xcn LoRA。现在默认 `--remote-profile auto`，由原始 model 链决定远端 profile。
+旧版转换器默认把所有 KSampler 都映射到 `anima_qwen_aella_xcn`，即使原始 workflow 是 base-only，也会在远端强行加载 Aella/xcn LoRA。现在默认 `--remote-profile auto`，由原始 model 链决定远端 profile；显式指定 `anima_qwen_aella_xcn` 时默认会失败，必须加 `--allow-fixed-profile` 才能作为调试流使用。
+
+已冻结审计报告：
+
+```text
+F:\TieguoDun\Remote_comfyui\docs\reports\remote_sampling_profile_pollution_audit_20260704.md
+```
+
+该报告确认最近异常实测 job 命中了 fixed profile，并且远端 prompt 中存在两个 `LoraLoader`。
 
 #### 3-step smoke 误用
 `remote_sampling_converter_converted_20260630_1755_api.json` 是 3 步烟测流，不能用于质量判断。用户实测异常图：

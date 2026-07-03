@@ -14,6 +14,7 @@ from typing import Any
 DEFAULT_PROJECT_ROOT = os.environ.get("REMOTE_SAMPLING_PROJECT_ROOT", r"F:\TieguoDun\Remote_comfyui")
 DEFAULT_BRIDGE_PYTHON = os.environ.get("REMOTE_SAMPLING_BRIDGE_PYTHON", r"C:\Python314\python.exe")
 DEFAULT_REMOTE_PROFILE = "auto"
+FIXED_PROFILE_WARN_LIST = {"anima_qwen_aella_xcn"}
 DEFAULT_LOCAL_LORA_ROOT = os.environ.get(
     "REMOTE_SAMPLING_LOCAL_LORA_ROOT",
     r"F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\models\loras",
@@ -52,6 +53,61 @@ def write_json(path: Path, data: dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
         f.write("\n")
+
+
+def profile_path(profile_name: str) -> Path:
+    normalized = profile_name.replace("\\", "/")
+    if normalized.endswith(".json"):
+        return PROFILE_DIR / normalized
+    return PROFILE_DIR / f"{normalized}.json"
+
+
+def profile_id(profile_name: str) -> str:
+    normalized = profile_name.replace("\\", "/")
+    return Path(normalized).with_suffix("").name
+
+
+def is_fixed_profile(profile_name: str) -> bool:
+    return profile_id(profile_name) in FIXED_PROFILE_WARN_LIST
+
+
+def read_profile(profile_name: str) -> dict[str, Any] | None:
+    path = profile_path(profile_name)
+    if not path.exists():
+        return None
+    return read_json(path)
+
+
+def profile_lora_summary(profile: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not profile:
+        return []
+    loras = profile.get("loras", [])
+    if not isinstance(loras, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in loras:
+        if not isinstance(item, dict):
+            continue
+        result.append(
+            {
+                "lora_name": item.get("lora_name"),
+                "strength_model": item.get("strength_model"),
+                "strength_clip": item.get("strength_clip"),
+            }
+        )
+    return result
+
+
+def profile_summary(profile_name: str, profile: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        "remote_profile": profile_name,
+        "profile_path": str(profile_path(profile_name)),
+        "is_fixed_profile": is_fixed_profile(profile_name),
+        "unet": (profile or {}).get("unet", {}),
+        "clip": (profile or {}).get("clip", {}),
+        "lora_count": len(profile_lora_summary(profile)),
+        "loras": profile_lora_summary(profile),
+    }
 
 
 def iter_refs(value: Any):
@@ -259,7 +315,7 @@ def write_generated_profile(
     sampler_inputs: dict[str, Any],
     output_path: Path,
     lora_root: Path,
-) -> str:
+) -> tuple[str, dict[str, Any]]:
     unet, loras = model_chain_profile(prompt, sampler_inputs.get("model"), lora_root)
     clip_ref = first_conditioning_clip_ref(prompt, sampler_inputs)
     if clip_ref is None:
@@ -276,7 +332,7 @@ def write_generated_profile(
     }
     GENERATED_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     write_json(GENERATED_PROFILE_DIR / f"{profile_name}.json", profile)
-    return relative_profile
+    return relative_profile, profile
 
 
 def bypass_lora_clip_ref(prompt: dict[str, Any], ref: Any) -> Any:
@@ -323,6 +379,7 @@ def convert_prompt(
     sampler_prefix: str,
     prune_unreachable: bool,
     bypass_local_lora_clip: bool,
+    allow_fixed_profile: bool,
     output_path: Path,
     lora_root: Path,
 ) -> tuple[dict[str, Any], list[str], list[str], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -333,6 +390,13 @@ def convert_prompt(
 
     if bypass_local_lora_clip:
         rewired_clip_refs = bypass_local_lora_clip_loaders(converted)
+
+    if is_fixed_profile(remote_profile) and not allow_fixed_profile:
+        raise ValueError(
+            "refusing fixed remote profile 'anima_qwen_aella_xcn' because it injects Aella/xcn LoRA. "
+            "Use --remote-profile auto for equivalence conversion, or add --allow-fixed-profile only when "
+            "you intentionally want this exact remote profile."
+        )
 
     for node_id, node in converted.items():
         if not isinstance(node, dict) or node.get("class_type") != "KSampler":
@@ -354,15 +418,17 @@ def convert_prompt(
             raise ValueError(f"KSampler node {node_id} is missing required inputs: {', '.join(missing)}")
 
         node_remote_profile = remote_profile
+        profile_data: dict[str, Any] | None = None
         if remote_profile == "auto":
-            node_remote_profile = write_generated_profile(
+            node_remote_profile, profile_data = write_generated_profile(
                 prompt=converted,
                 sampler_node_id=node_id,
                 sampler_inputs=inputs,
                 output_path=output_path,
                 lora_root=lora_root,
             )
-            generated_profiles.append({"node": node_id, "remote_profile": node_remote_profile})
+        else:
+            profile_data = read_profile(node_remote_profile)
 
         inputs.pop("model", None)
         inputs.setdefault("remote_profile", node_remote_profile)
@@ -372,6 +438,13 @@ def convert_prompt(
         inputs.setdefault("sampler_id", f"{sampler_prefix}_{node_id}")
         node["class_type"] = "Remote_Sampling_local"
         converted_ids.append(node_id)
+        generated_profiles.append(
+            {
+                "node": node_id,
+                "sampler_id": inputs.get("sampler_id"),
+                **profile_summary(node_remote_profile, profile_data),
+            }
+        )
 
     removed_ids: list[str] = []
     if prune_unreachable:
@@ -400,6 +473,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora-root", type=Path, default=Path(DEFAULT_LOCAL_LORA_ROOT))
     parser.add_argument("--keep-unreachable", action="store_true")
     parser.add_argument(
+        "--allow-fixed-profile",
+        action="store_true",
+        help="Allow explicitly selected fixed profiles such as anima_qwen_aella_xcn. Without this flag, fixed profiles are rejected to prevent LoRA pollution.",
+    )
+    parser.add_argument(
         "--bypass-local-lora-clip",
         action="store_true",
         help="Rewire CLIP inputs that point at local LoRA loaders back to their upstream CLIP, allowing local model/LoRA loader branches to be pruned.",
@@ -419,6 +497,7 @@ def main() -> int:
         sampler_prefix=args.sampler_prefix,
         prune_unreachable=not args.keep_unreachable,
         bypass_local_lora_clip=args.bypass_local_lora_clip,
+        allow_fixed_profile=args.allow_fixed_profile,
         output_path=args.output,
         lora_root=args.lora_root,
     )
@@ -433,8 +512,13 @@ def main() -> int:
                 "output": str(args.output),
                 "converted": converted_ids,
                 "rewired_clip_refs": rewired_clip_refs,
-                "generated_profiles": generated_profiles,
+                "profile_summary": generated_profiles,
                 "removed_unreachable": removed_ids,
+                "warnings": [
+                    "fixed profile was explicitly allowed; verify the original local workflow intended these LoRA resources"
+                ]
+                if any(item.get("is_fixed_profile") for item in generated_profiles)
+                else [],
             },
             ensure_ascii=False,
             indent=2,

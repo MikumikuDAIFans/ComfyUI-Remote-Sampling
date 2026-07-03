@@ -33,7 +33,7 @@ Remote_Sampling_local
 
 4. 在本地 workflow 中使用 `Remote_Sampling_local` 替代普通 `KSampler`。
 
-常用参数：
+手写调试时常用参数：
 
 ```text
 remote_profile: anima_qwen_aella_xcn
@@ -41,6 +41,8 @@ project_root: F:\TieguoDun\Remote_comfyui
 python_executable: C:\Python314\python.exe
 timeout_sec: 3600
 ```
+
+注意：`anima_qwen_aella_xcn` 是固定调试 profile，会加载 Aella 角色 LoRA 和 xcn 画风 LoRA。正式把本地 workflow 转为远端采样时，不要手工套用这个 profile，除非原始本地 workflow 本来就应使用同一组 LoRA。
 
 5. 结束后停止远端服务：
 
@@ -59,6 +61,7 @@ python F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py 
 - 原 workflow 没有 LoRA 时，远端 profile 也不会加载 LoRA。
 - 原 workflow 使用 `LoraLoader` 或 `Lora Loader (LoraManager)` 时，会把激活 LoRA、模型强度、CLIP 强度写入 `ComfyUI-Remote-Sampling\profiles\generated\*.json`。
 - 不再建议对转换脚本手动指定固定 profile，除非你明确知道该 workflow 应该套用哪组远端模型/LoRA。
+- 如果显式指定 `--remote-profile anima_qwen_aella_xcn`，转换器默认会拒绝，以避免无 LoRA workflow 被污染。只有调试或演示时确认需要该固定 profile，才加 `--allow-fixed-profile`。
 
 如果原 workflow 的 `CLIPTextEncode.clip` 来自 LoRA Loader 或 LoRA Manager，使用：
 
@@ -75,6 +78,17 @@ python F:\TieguoDun\Remote_comfyui\tools\convert_ksampler_to_remote_sampling.py 
   --sampler-prefix real00042 `
   --bypass-local-lora-clip
 ```
+
+转换后建议立即审计：
+
+```powershell
+python F:\TieguoDun\Remote_comfyui\tools\audit_remote_sampling_workflow.py --workflow <output_api.json>
+```
+
+审计输出应确认：
+- base-only workflow: `LoRA: none`，远端 prompt 不应含 `LoraLoader`。
+- LoRA workflow: LoRA 清单和强度必须与原始本地 model 链一致。
+- 如果出现 `fixed profile anima_qwen_aella_xcn` warning，不要把它当作资源等价验证结果。
 
 ### 当前 profile
 内置 Profile 文件：
@@ -172,6 +186,14 @@ local.metrics.upload
 local.metrics.sampling
 local.metrics.download
 ```
+
+可以用审计工具检查任意 job：
+
+```powershell
+python F:\TieguoDun\Remote_comfyui\tools\audit_remote_sampling_workflow.py --job F:\TieguoDun\Remote_comfyui\jobs\<job_dir>
+```
+
+它会展开 `remote_profile`、UNET、CLIP、LoRA、LoRA strength、远端 prompt class list、是否存在 forbidden image nodes，以及 fixed profile 污染 warning。
 
 `result.json` 会记录：
 

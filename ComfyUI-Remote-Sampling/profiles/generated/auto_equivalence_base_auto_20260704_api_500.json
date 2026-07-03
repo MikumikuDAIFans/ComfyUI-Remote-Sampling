@@ -1,0 +1,16 @@
+{
+  "name": "generated/auto_equivalence_base_auto_20260704_api_500",
+  "description": "Auto-generated from equivalence_base_auto_20260704_api.json, KSampler node 500.",
+  "unet": {
+    "class_type": "UNETLoader",
+    "unet_name": "anima-base-v1.0.safetensors",
+    "weight_dtype": "default"
+  },
+  "clip": {
+    "class_type": "CLIPLoader",
+    "clip_name": "qwen_3_06b_base.safetensors",
+    "type": "stable_diffusion",
+    "device": "default"
+  },
+  "loras": []
+}
