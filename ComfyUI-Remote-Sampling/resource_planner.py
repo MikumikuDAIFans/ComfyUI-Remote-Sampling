@@ -12,15 +12,20 @@ DEFAULT_PROJECT_ROOT = Path(os.environ.get("REMOTE_SAMPLING_PROJECT_ROOT", r"F:\
 MAX_INLINE_SHA256_BYTES = int(os.environ.get("REMOTE_WORKFLOW_MAX_INLINE_SHA256_BYTES", str(256 * 1024 * 1024)))
 
 
-def remote_candidates(kind: str, relative_path: str) -> list[str]:
+def posix_path_text(value: str) -> str:
+    return str(value).replace("\\", "/")
+
+
+def remote_candidates(kind: str, relative_path: str, *, remote_base: str = REMOTE_BASE) -> list[str]:
     normalized = relative_path.replace("\\", "/")
+    remote_comfy = f"{posix_path_text(remote_base).rstrip('/')}/ComfyUI"
     subdirs = {
         "unet": ["diffusion_models", "unet"],
         "clip": ["clip"],
         "vae": ["vae"],
         "lora": ["loras"],
     }.get(kind, [])
-    return [f"{REMOTE_COMFY}/models/{subdir}/{normalized}" for subdir in subdirs]
+    return [f"{remote_comfy}/models/{subdir}/{normalized}" for subdir in subdirs]
 
 
 def sha256_file(path: Path) -> str:
@@ -69,12 +74,13 @@ def build_resources_plan(
     remote_base: str = REMOTE_BASE,
     project_root: Path = DEFAULT_PROJECT_ROOT,
 ) -> dict[str, Any]:
+    remote_base = posix_path_text(remote_base).rstrip("/")
     planned: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     for resource in dedupe_resources(list(analysis.get("resources", []))):
         kind = str(resource.get("kind"))
         relative_path = str(resource.get("relative_path") or resource.get("name") or "").replace("\\", "/")
-        candidates = remote_candidates(kind, relative_path)
+        candidates = remote_candidates(kind, relative_path, remote_base=remote_base)
         primary_remote = candidates[0] if candidates else None
         exists_local = bool(resource.get("exists"))
         local_info = local_file_info(resource.get("local_path"))

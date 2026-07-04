@@ -1,0 +1,27 @@
+{
+  "schema_version": "resources-diff-v1",
+  "checked_at": "2026-07-05 03:54:55",
+  "relative_path_policy": "mirror_local_comfy_models_relative_path",
+  "resources": [
+    {
+      "index": 0,
+      "kind": "lora",
+      "relative_path": "_remote_sampling_test/synthetic_phase6_resource.bin",
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\transfer\\phase6_resource_sync\\synthetic_phase6_resource.bin",
+      "local_size": 37,
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/models/loras/_remote_sampling_test/synthetic_phase6_resource.bin",
+      "remote_size": 37,
+      "remote_exists": true,
+      "action": "ready",
+      "upload_command_hint": null
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "ready": 1,
+    "upload_required": 0,
+    "size_mismatch": 0,
+    "blocked_local_missing": 0
+  },
+  "fatal": false
+}

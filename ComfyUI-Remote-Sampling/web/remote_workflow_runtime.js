@@ -3,7 +3,7 @@ import { api } from "/scripts/api.js";
 
 const PANEL_ID = "remote-workflow-runtime-controller";
 
-window.__remoteWorkflowRuntimeControllerVersion = "20260705-phase6-v1";
+window.__remoteWorkflowRuntimeControllerVersion = "20260705-guarded-run-v2";
 
 function ensureStyle() {
   if (document.getElementById(`${PANEL_ID}-style`)) return;
@@ -250,8 +250,8 @@ async function runCurrentWorkflow(panel) {
   try {
     setMessage(panel, "Building API prompt from current graph...");
     const { prompt, workflow } = await graphPrompt();
-    setMessage(panel, "Converting current workflow with guarded workflow-level runtime...");
-    const converted = await postJson("/remote_workflow/runtime/convert", { prompt, workflow });
+    setMessage(panel, "Preparing guarded workflow runtime: resources, custom nodes, conversion...");
+    const converted = await postJson("/remote_workflow/runtime/run", { prompt, workflow });
     if (!converted.converted_prompt_object) {
       throw new Error("Conversion did not return converted_prompt_object.");
     }

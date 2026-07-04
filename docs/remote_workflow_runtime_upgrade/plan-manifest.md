@@ -5,7 +5,7 @@
 - Plan ID: `remote-workflow-runtime-upgrade`
 - Version: `v1`
 - Created: `2026-07-04`
-- Last updated: `2026-07-05 00:56 +08:00`
+- Last updated: `2026-07-05 04:08 +08:00`
 - Project root: `F:\TieguoDun\Remote_comfyui`
 - Current branch: `main`
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_workflow_runtime_upgrade\01_remote_workflow_runtime_upgrade_task_book.md`
@@ -52,4 +52,4 @@
 - Latest known GitHub remote head before this plan: `ff1df3df4dd32530299ef6d9264953cde26a0e39`
 - Current implementation already supports runtime convert-and-queue for simple KSampler workflows.
 - Current implementation does not yet provide full workflow-level resource synchronization or custom node installation management.
-- Current execution state: Phase 0 through Phase 8 current upgrade slice passed; git commit and push are next.
+- Current execution state: Phase 0 through Phase 7 current supported scope passed with guarded backend `/run`; Phase 8 final checks, commit and push are next.

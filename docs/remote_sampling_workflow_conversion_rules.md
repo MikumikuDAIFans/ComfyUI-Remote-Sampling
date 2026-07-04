@@ -42,7 +42,7 @@
 
 - `Plan Current Workflow`：生成 workflow-level plan bundle，不排队。
 - `Convert`：生成本次专属 converted prompt 和 remote execution plan，不排队。
-- `Run Guarded`：从当前画布即时生成 API prompt、转换、审计、生成 run bundle，并提交 converted prompt。
+- `Run Guarded`：从当前画布即时生成 API prompt，先执行资源检查/同步、自定义节点检查/同步、依赖安装计划和远端 import smoke，再转换、审计、生成 run bundle，并提交 converted prompt。
 
 旧 `Remote Sampling` 面板的 `Run Current Workflow` 仍保留为兼容入口，但正式工作流级能力以 `Remote Workflow Runtime` 为准。
 

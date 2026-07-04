@@ -1,0 +1,20 @@
+{
+  "schema_version": "resources-sync-report-v1",
+  "synced_at": "2026-07-05 03:54:49",
+  "resources": [
+    {
+      "kind": "lora",
+      "relative_path": "_remote_sampling_test/synthetic_phase6_resource.bin",
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\transfer\\phase6_resource_sync\\synthetic_phase6_resource.bin",
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/models/loras/_remote_sampling_test/synthetic_phase6_resource.bin",
+      "bytes": 37,
+      "action": "uploaded",
+      "upload_log_tail": "upload F:\\TieguoDun\\Remote_comfyui\\transfer\\phase6_resource_sync\\synthetic_phase6_resource.bin -> /home/user02/remote_ComfyUI/ComfyUI/models/loras/_remote_sampling_test/synthetic_phase6_resource.bin (0/37 bytes)\nsynthetic_phase6_resource.bin: 0/37 bytes (0.0%)\nsynthetic_phase6_resource.bin: 37/37 bytes (100.0%)\n"
+    }
+  ],
+  "summary": {
+    "uploaded": 1,
+    "bytes": 37
+  },
+  "fatal": false
+}

@@ -37,7 +37,7 @@ Remote_Sampling_local
 
 - `Plan Current Workflow`：只分析当前画布，生成 `workflow_analysis.json`、`resources_plan.json`、`custom_nodes_plan.json`，不排队。
 - `Convert`：从当前画布重新生成本次专属 `converted_local_prompt.json` 和 `remote_execution_plan.json`，不排队。
-- `Run Guarded`：从当前画布重新转换，审计通过后把 converted prompt 提交到 ComfyUI 队列。
+- `Run Guarded`：先执行远端资源检查/同步、自定义节点检查/同步、依赖安装计划、远端 `object_info` import smoke，再从当前画布重新转换；全部通过后把 converted prompt 提交到 ComfyUI 队列。
 
 旧的 `Remote Sampling` 面板 `Run Current Workflow` 仍保留为兼容入口，但后续正式能力会优先落在 `Remote Workflow Runtime`。
 
@@ -57,6 +57,10 @@ resources_plan.json
 custom_nodes_plan.json
 converted_local_prompt.json
 remote_execution_plan.json
+resources_diff.json
+remote_environment_report.json
+remote_custom_node_dependency_install.json
+remote_custom_node_import_smoke.json
 manifest.json
 ```
 
@@ -67,6 +71,12 @@ F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_<timestamp>_<id>_<sampler_id>
 ```
 
 其中 `status.json`、`events.jsonl`、`job.json.local.metrics` 记录上传、采样、下载和总耗时。
+
+依赖安装说明：
+
+- 默认只生成 `remote_custom_node_dependency_install.json`，不会自动联网 `pip install`。
+- 如确实需要执行依赖安装，必须由操作者明确允许，例如在后端 payload 中设置 `allow_remote_dependency_install: true`，或手动运行 `tools/install_remote_custom_node_dependencies.py --execute`。
+- 如果依赖未安装导致远端 `object_info` 缺少节点 class，`Run Guarded` 会在上传 latent 前失败。
 
 兼容入口会从当前画布生成 API prompt，调用本地 `/remote_sampling/convert`，即时转换并审计，然后把 converted prompt 提交到 ComfyUI 队列。每次运行都会生成旧格式 run bundle：
 

@@ -19,6 +19,10 @@ MAX_SCAN_BYTES = int(os.environ.get("REMOTE_WORKFLOW_CUSTOM_NODE_SCAN_MAX_BYTES"
 SELF_PACKAGE_NAME = "ComfyUI-Remote-Sampling"
 
 
+def posix_path_text(value: str) -> str:
+    return str(value).replace("\\", "/")
+
+
 def custom_nodes_root(local_comfy_root: Path = DEFAULT_LOCAL_COMFY_ROOT) -> Path:
     return local_comfy_root / "custom_nodes"
 
@@ -120,6 +124,7 @@ def build_custom_nodes_plan(
     local_comfy_root: Path = DEFAULT_LOCAL_COMFY_ROOT,
     remote_base: str = REMOTE_BASE,
 ) -> dict[str, Any]:
+    remote_base = posix_path_text(remote_base).rstrip("/")
     custom_classes = list(analysis.get("custom_node_classes", []))
     packages: dict[str, dict[str, Any]] = {}
     class_items: list[dict[str, Any]] = []

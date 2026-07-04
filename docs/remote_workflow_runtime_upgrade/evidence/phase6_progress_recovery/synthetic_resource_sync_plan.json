@@ -1,0 +1,20 @@
+{
+  "schema_version": "resources-plan-v1",
+  "remote_base": "/home/user02/remote_ComfyUI",
+  "remote_comfy": "/home/user02/remote_ComfyUI/ComfyUI",
+  "relative_path_policy": "mirror_local_comfy_models_relative_path",
+  "resources": [
+    {
+      "kind": "lora",
+      "name": "_remote_sampling_test/synthetic_phase6_resource.bin",
+      "relative_path": "_remote_sampling_test/synthetic_phase6_resource.bin",
+      "source_node": "synthetic",
+      "local": {"exists": true, "path": "F:\\TieguoDun\\Remote_comfyui\\transfer\\phase6_resource_sync\\synthetic_phase6_resource.bin", "candidates": [], "file": {"size": 37}},
+      "remote": {"base": "/home/user02/remote_ComfyUI", "primary_path": "/home/user02/remote_ComfyUI/ComfyUI/models/loras/_remote_sampling_test/synthetic_phase6_resource.bin", "candidates": ["/home/user02/remote_ComfyUI/ComfyUI/models/loras/_remote_sampling_test/synthetic_phase6_resource.bin"], "relative_path_policy": "mirror_local_comfy_models_relative_path"},
+      "sync": {"action": "check_remote", "reason": "synthetic sync probe", "upload_command_hint": null}
+    }
+  ],
+  "summary": {"total": 1, "local_missing": 0, "needs_remote_check": 1},
+  "errors": [],
+  "fatal": false
+}

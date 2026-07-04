@@ -14,7 +14,7 @@ The recommended user-facing entry is the local ComfyUI floating panel:
 
 - `Plan Current Workflow`: analyze the current graph, list model/LoRA/custom-node dependencies, and create an audit bundle without queueing.
 - `Convert`: generate a fresh per-run converted prompt and remote execution plan without queueing.
-- `Run Guarded`: convert the current graph at runtime, audit the result, then queue the converted prompt.
+- `Run Guarded`: run backend guards for remote resources, custom nodes, dependency install planning, remote import smoke, runtime conversion, then queue the converted prompt.
 
 Do not use old converted workflow files as the formal entry point. The workflow-level path is designed to convert from the current source prompt for every run, preventing stale LoRA/profile contamination.
 
@@ -31,6 +31,9 @@ Do not use old converted workflow files as the formal entry point. The workflow-
 - `tools/check_remote_resource_plan.py`: checks planned model resources on the remote server.
 - `tools/check_remote_custom_nodes_plan.py`: checks planned custom node packages on the remote server.
 - `tools/sync_remote_custom_nodes.py`: archives local custom node packages and extracts them under remote `ComfyUI/custom_nodes`.
+- `tools/sync_remote_resources.py`: uploads model/LoRA resources that are missing remotely.
+- `tools/install_remote_custom_node_dependencies.py`: builds or executes remote dependency install commands. Default mode is dry-run.
+- `tools/remote_custom_node_import_smoke.py`: starts remote ComfyUI when needed and checks `object_info` for required custom node classes.
 
 ## Current Monitoring Features
 
@@ -71,6 +74,10 @@ The workflow runtime is fail-closed by default:
 
 - missing local model/LoRA resources block conversion
 - unsupported model or CLIP chains block conversion
+- missing remote model/LoRA resources are uploaded before queueing when auto-sync is enabled
+- remote custom node packages are checked/synced before queueing
+- custom node dependency commands are recorded; actual pip install requires explicit approval
+- remote ComfyUI import smoke must find required custom node classes in `object_info`
 - fixed debug profiles such as `anima_qwen_aella_xcn` are refused unless explicitly allowed
 - remote RGB image nodes remain forbidden for remote sampling jobs
 - each workflow run writes a fresh bundle under `runs/workflow_runtime_<timestamp>_<id>`

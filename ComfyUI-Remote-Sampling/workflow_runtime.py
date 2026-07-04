@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 import importlib.util
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ try:
     from .protocol import json_sha256, write_json
     from .resource_planner import build_resources_plan
     from .runtime_conversion import (
+        DEFAULT_BRIDGE_PYTHON,
         DEFAULT_PROJECT_ROOT,
         CONVERTER_VERSION,
         POLICY_VERSION,
@@ -65,6 +67,7 @@ except ImportError:
     build_custom_nodes_plan = _custom_node_planner_module.build_custom_nodes_plan
     build_resources_plan = _resource_planner_module.build_resources_plan
     DEFAULT_PROJECT_ROOT = _runtime_module.DEFAULT_PROJECT_ROOT
+    DEFAULT_BRIDGE_PYTHON = _runtime_module.DEFAULT_BRIDGE_PYTHON
     CONVERTER_VERSION = _runtime_module.CONVERTER_VERSION
     POLICY_VERSION = _runtime_module.POLICY_VERSION
     convert_runtime_prompt = _runtime_module.convert_runtime_prompt
@@ -101,8 +104,8 @@ def workflow_runtime_status() -> dict[str, Any]:
         "state_machine": STATE_MACHINE,
         "capabilities": {
             "plan_current_workflow": True,
-            "run_current_workflow": False,
-            "resource_sync": False,
+            "run_current_workflow": "guarded_prepare_then_frontend_queue",
+            "resource_sync": "upload_required_resources_before_queue",
             "custom_node_sync": "archive_tool_available",
             "runtime_conversion_backend": CONVERTER_VERSION,
             "runtime_conversion_policy": POLICY_VERSION,
@@ -221,11 +224,61 @@ def _copy_json_value(path_text: str | None) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def create_workflow_runtime_conversion(payload: dict[str, Any]) -> dict[str, Any]:
-    plan = create_workflow_runtime_plan(payload)
-    if not plan.get("ok"):
-        return plan
+def _read_json_file(path: Path) -> dict[str, Any]:
+    import json
 
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise TypeError(f"expected JSON object: {path}")
+    return data
+
+
+def _run_project_tool(project_root: Path, args: list[str], *, timeout: int = 7200, allow_failure: bool = False) -> str:
+    completed = subprocess.run(
+        [str(DEFAULT_BRIDGE_PYTHON), *args],
+        cwd=str(project_root),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=timeout,
+    )
+    if completed.returncode != 0 and not allow_failure:
+        raise RuntimeError(completed.stdout)
+    return completed.stdout
+
+
+def _fail_with_plan(plan: dict[str, Any], stage: str, error_type: str, message: str, *, details: Any = None) -> dict[str, Any]:
+    run_dir = Path(str(plan["run_dir"]))
+    error = {
+        "type": error_type,
+        "message": message,
+        "details": details,
+        "fatal": True,
+    }
+    failure = {
+        **plan,
+        "ok": False,
+        "stage": stage,
+        "error": error,
+        "errors": list(plan.get("errors", [])) + [error],
+    }
+    write_json(run_dir / "manifest.json", failure)
+    write_json(
+        run_dir / "workflow_status.json",
+        {
+            "schema_version": "workflow-runtime-status-v0",
+            "run_id": plan["run_id"],
+            "stage": stage,
+            "message": message,
+            "overall_percent": 100 if stage == "failed" else 50,
+            "fatal": True,
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    )
+    return failure
+
+
+def _convert_from_plan(plan: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     run_dir = Path(str(plan["run_dir"]))
     runtime_options = dict(payload.get("options", {})) if isinstance(payload.get("options"), dict) else {}
     runtime_options.setdefault("sampler_prefix", f"workflow_{plan['run_id']}")
@@ -263,7 +316,13 @@ def create_workflow_runtime_conversion(payload: dict[str, Any]) -> dict[str, Any
         "source_prompt_sha256": plan.get("source_prompt_sha256"),
         "workflow_analysis_sha256": plan.get("workflow_analysis_sha256"),
         "resources_plan_sha256": plan.get("resources_plan_sha256"),
+        "resources_diff_sha256": plan.get("resources_diff_sha256"),
+        "resources_sync_report_sha256": plan.get("resources_sync_report_sha256"),
         "custom_nodes_plan_sha256": plan.get("custom_nodes_plan_sha256"),
+        "remote_environment_report_sha256": plan.get("remote_environment_report_sha256"),
+        "custom_nodes_sync_report_sha256": plan.get("custom_nodes_sync_report_sha256"),
+        "remote_custom_node_dependency_install_sha256": plan.get("remote_custom_node_dependency_install_sha256"),
+        "remote_custom_node_import_smoke_sha256": plan.get("remote_custom_node_import_smoke_sha256"),
         "converted_prompt": str(converted_prompt_path) if isinstance(converted_prompt, dict) else converted.get("converted_prompt"),
         "converted_prompt_sha256": json_sha256(converted_prompt) if isinstance(converted_prompt, dict) else converted.get("converted_prompt_sha256"),
         "profile_snapshots": converted.get("profile_snapshots", []),
@@ -316,4 +375,287 @@ def create_workflow_runtime_conversion(payload: dict[str, Any]) -> dict[str, Any
         "remote_execution_plan_object": remote_execution_plan,
         "converted_prompt_object": converted_prompt,
         "audit_summary": converted.get("audit_summary"),
+    }
+
+
+def create_workflow_runtime_conversion(payload: dict[str, Any]) -> dict[str, Any]:
+    plan = create_workflow_runtime_plan(payload)
+    if not plan.get("ok"):
+        return plan
+    return _convert_from_plan(plan, payload)
+
+
+def _check_and_sync_resources(plan: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    project_root = project_root_from_payload(payload)
+    run_dir = Path(str(plan["run_dir"]))
+    resources_plan_path = run_dir / "resources_plan.json"
+    resources_diff_path = run_dir / "resources_diff.json"
+    sync_report_path = run_dir / "resources_sync_report.json"
+    check_stdout = _run_project_tool(
+        project_root,
+        [
+            str(project_root / "tools" / "check_remote_resource_plan.py"),
+            str(resources_plan_path),
+            "--output",
+            str(resources_diff_path),
+        ],
+        timeout=300,
+        allow_failure=True,
+    )
+    if not resources_diff_path.is_file():
+        return _fail_with_plan(
+            plan,
+            "resource_plan",
+            "RemoteCheckDidNotWriteReport",
+            "Remote resource checker did not write resources_diff.json.",
+            details={"stdout_tail": check_stdout[-4000:]},
+        )
+    diff = _read_json_file(resources_diff_path)
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    auto_sync = options.get("auto_sync_resources", True)
+    if diff.get("fatal"):
+        return _fail_with_plan(plan, "resource_plan", "ResourcePreflightFailed", "Remote resource diff is fatal.", details=diff)
+    if int(diff.get("summary", {}).get("upload_required", 0)) > 0:
+        if not auto_sync:
+            return _fail_with_plan(plan, "sync", "ResourceSyncRequired", "Remote resources are missing and auto_sync_resources is disabled.", details=diff)
+        recheck_stdout = _run_project_tool(
+            project_root,
+            [
+                str(project_root / "tools" / "sync_remote_resources.py"),
+                str(resources_plan_path),
+                str(resources_diff_path),
+                "--output",
+                str(sync_report_path),
+            ],
+            timeout=7200,
+        )
+        sync_report = _read_json_file(sync_report_path)
+        _run_project_tool(
+            project_root,
+            [
+                str(project_root / "tools" / "check_remote_resource_plan.py"),
+                str(resources_plan_path),
+                "--output",
+                str(resources_diff_path),
+            ],
+            timeout=300,
+            allow_failure=True,
+        )
+        if not resources_diff_path.is_file():
+            return _fail_with_plan(
+                plan,
+                "sync",
+                "RemoteCheckDidNotWriteReport",
+                "Remote resource checker did not write resources_diff.json after sync.",
+                details={"stdout_tail": recheck_stdout[-4000:]},
+            )
+        diff = _read_json_file(resources_diff_path)
+        if diff.get("fatal") or int(diff.get("summary", {}).get("upload_required", 0)) > 0:
+            return _fail_with_plan(plan, "sync", "ResourceSyncFailed", "Resources are still not ready after sync.", details={"diff": diff, "sync_report": sync_report})
+
+    manifest = _copy_json_value(str(run_dir / "manifest.json")) or plan
+    manifest.update(
+        {
+            "resources_diff": str(resources_diff_path),
+            "resources_diff_sha256": json_sha256(diff),
+            "resources_sync_report": str(sync_report_path) if sync_report_path.is_file() else None,
+            "resources_sync_report_sha256": json_sha256(_read_json_file(sync_report_path)) if sync_report_path.is_file() else None,
+            "resources_ready": True,
+        }
+    )
+    write_json(run_dir / "manifest.json", manifest)
+    return manifest
+
+
+def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    project_root = project_root_from_payload(payload)
+    run_dir = Path(str(plan["run_dir"]))
+    custom_nodes_plan_path = run_dir / "custom_nodes_plan.json"
+    env_report_path = run_dir / "remote_environment_report.json"
+    sync_report_path = run_dir / "custom_nodes_sync_report.json"
+    dependency_report_path = run_dir / "remote_custom_node_dependency_install.json"
+    import_smoke_path = run_dir / "remote_custom_node_import_smoke.json"
+    check_stdout = _run_project_tool(
+        project_root,
+        [
+            str(project_root / "tools" / "check_remote_custom_nodes_plan.py"),
+            str(custom_nodes_plan_path),
+            "--output",
+            str(env_report_path),
+        ],
+        timeout=300,
+        allow_failure=True,
+    )
+    if not env_report_path.is_file():
+        return _fail_with_plan(
+            plan,
+            "remote_env",
+            "RemoteCheckDidNotWriteReport",
+            "Remote custom node checker did not write remote_environment_report.json.",
+            details={"stdout_tail": check_stdout[-4000:]},
+        )
+    report = _read_json_file(env_report_path)
+    options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+    auto_sync = options.get("auto_sync_custom_nodes", True)
+    if report.get("fatal"):
+        return _fail_with_plan(plan, "remote_env", "RemoteEnvironmentFailed", "Remote custom node environment check is fatal.", details=report)
+    if int(report.get("summary", {}).get("sync_required", 0)) > 0:
+        if not auto_sync:
+            return _fail_with_plan(plan, "remote_env", "CustomNodeSyncRequired", "Remote custom nodes are missing and auto_sync_custom_nodes is disabled.", details=report)
+        recheck_stdout = _run_project_tool(
+            project_root,
+            [
+                str(project_root / "tools" / "sync_remote_custom_nodes.py"),
+                str(custom_nodes_plan_path),
+                "--output",
+                str(sync_report_path),
+            ],
+            timeout=7200,
+        )
+        sync_report = _read_json_file(sync_report_path)
+        _run_project_tool(
+            project_root,
+            [
+                str(project_root / "tools" / "check_remote_custom_nodes_plan.py"),
+                str(custom_nodes_plan_path),
+                "--output",
+                str(env_report_path),
+            ],
+            timeout=300,
+            allow_failure=True,
+        )
+        if not env_report_path.is_file():
+            return _fail_with_plan(
+                plan,
+                "remote_env",
+                "RemoteCheckDidNotWriteReport",
+                "Remote custom node checker did not write remote_environment_report.json after sync.",
+                details={"stdout_tail": recheck_stdout[-4000:]},
+            )
+        report = _read_json_file(env_report_path)
+    if report.get("fatal") or int(report.get("summary", {}).get("sync_required", 0)) > 0:
+            return _fail_with_plan(plan, "remote_env", "CustomNodeSyncFailed", "Custom nodes are still not ready after sync.", details={"report": report, "sync_report": sync_report})
+
+    dependency_args = [
+        str(project_root / "tools" / "install_remote_custom_node_dependencies.py"),
+        str(custom_nodes_plan_path),
+        "--output",
+        str(dependency_report_path),
+    ]
+    if bool(options.get("allow_remote_dependency_install", False)):
+        dependency_args.append("--execute")
+    dependency_stdout = _run_project_tool(
+        project_root,
+        dependency_args,
+        timeout=2700,
+        allow_failure=True,
+    )
+    if not dependency_report_path.is_file():
+        return _fail_with_plan(
+            plan,
+            "remote_env",
+            "RemoteDependencyInstallDidNotWriteReport",
+            "Remote custom node dependency installer did not write report.",
+            details={"stdout_tail": dependency_stdout[-4000:]},
+        )
+    dependency_report = _read_json_file(dependency_report_path)
+    if dependency_report.get("fatal"):
+        return _fail_with_plan(
+            plan,
+            "remote_env",
+            "RemoteDependencyInstallFailed",
+            "Remote custom node dependency installation failed.",
+            details=dependency_report,
+        )
+
+    smoke_stdout = _run_project_tool(
+        project_root,
+        [
+            str(project_root / "tools" / "remote_custom_node_import_smoke.py"),
+            str(custom_nodes_plan_path),
+            "--output",
+            str(import_smoke_path),
+        ],
+        timeout=900,
+        allow_failure=True,
+    )
+    if not import_smoke_path.is_file():
+        return _fail_with_plan(
+            plan,
+            "remote_env",
+            "RemoteImportSmokeDidNotWriteReport",
+            "Remote custom node import smoke did not write report.",
+            details={"stdout_tail": smoke_stdout[-4000:]},
+        )
+    import_smoke = _read_json_file(import_smoke_path)
+    if import_smoke.get("fatal"):
+        return _fail_with_plan(
+            plan,
+            "remote_env",
+            "RemoteImportSmokeFailed",
+            "Remote ComfyUI object_info is missing required custom node classes.",
+            details=import_smoke,
+        )
+
+    manifest = _copy_json_value(str(run_dir / "manifest.json")) or plan
+    manifest.update(
+        {
+            "remote_environment_report": str(env_report_path),
+            "remote_environment_report_sha256": json_sha256(report),
+            "custom_nodes_sync_report": str(sync_report_path) if sync_report_path.is_file() else None,
+            "custom_nodes_sync_report_sha256": json_sha256(_read_json_file(sync_report_path)) if sync_report_path.is_file() else None,
+            "remote_custom_node_dependency_install": str(dependency_report_path),
+            "remote_custom_node_dependency_install_sha256": json_sha256(dependency_report),
+            "remote_custom_node_import_smoke": str(import_smoke_path),
+            "remote_custom_node_import_smoke_sha256": json_sha256(import_smoke),
+            "remote_environment_ready": True,
+        }
+    )
+    write_json(run_dir / "manifest.json", manifest)
+    return manifest
+
+
+def create_workflow_runtime_guarded_run(payload: dict[str, Any]) -> dict[str, Any]:
+    plan = create_workflow_runtime_plan(payload)
+    if not plan.get("ok"):
+        return plan
+    with_resources = _check_and_sync_resources(plan, payload)
+    if not with_resources.get("ok", False):
+        return with_resources
+    with_env = _check_and_sync_custom_nodes(with_resources, payload)
+    if not with_env.get("ok", False):
+        return with_env
+    converted = _convert_from_plan(with_env, payload)
+    if not converted.get("ok"):
+        return converted
+    run_dir = Path(str(converted["run_dir"]))
+    status = {
+        "schema_version": "workflow-runtime-status-v0",
+        "run_id": converted["run_id"],
+        "stage": "queue",
+        "message": "Guarded workflow runtime is ready to queue. Frontend will submit converted_prompt_object to ComfyUI.",
+        "overall_percent": 65,
+        "fatal": False,
+        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "guards": {
+            "resources_ready": True,
+            "remote_environment_ready": True,
+            "converted_from_current_source": True,
+        },
+    }
+    write_json(run_dir / "workflow_status.json", status)
+    manifest = _copy_json_value(str(run_dir / "manifest.json")) or converted
+    manifest.update(
+        {
+            "stage": "queue",
+            "workflow_status": str(run_dir / "workflow_status.json"),
+            "workflow_status_sha256": json_sha256(status),
+            "queue_policy": "frontend_submits_converted_prompt_after_backend_guards",
+        }
+    )
+    write_json(run_dir / "manifest.json", manifest)
+    return {
+        **converted,
+        **manifest,
+        "status": status,
     }

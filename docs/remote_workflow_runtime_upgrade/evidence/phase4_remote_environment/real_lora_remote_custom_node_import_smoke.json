@@ -1,0 +1,24 @@
+{
+  "schema_version": "remote-custom-node-import-smoke-v1",
+  "checked_at": "2026-07-05 03:50:20",
+  "started_remote_service": true,
+  "classes": [
+    "Lora Loader (LoraManager)",
+    "WeiLinPromptUIWithoutLora"
+  ],
+  "object_info": {
+    "object_info_count": 819,
+    "classes": [
+      "Lora Loader (LoraManager)",
+      "WeiLinPromptUIWithoutLora"
+    ],
+    "missing_classes": [],
+    "ok": true
+  },
+  "summary": {
+    "class_count": 2,
+    "missing_class_count": 0,
+    "object_info_count": 819
+  },
+  "fatal": false
+}

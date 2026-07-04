@@ -11,6 +11,7 @@
   - `Plan Current Workflow`
   - `Convert`
   - `Run Guarded`
+- `Run Guarded` now calls backend `/remote_workflow/runtime/run`, which performs guarded resource/env/dependency/import-smoke checks before returning a queueable converted prompt.
 - Conversion rules updated to make workflow-level runtime the formal entry.
 - `.gitignore` updated to exclude Playwright MCP temporary snapshots.
 - Local and remote `ComfyUI-Remote-Sampling` packages synced.
@@ -27,7 +28,10 @@ python -m py_compile:
   ComfyUI-Remote-Sampling\custom_node_planner.py
   tools\check_remote_resource_plan.py
   tools\check_remote_custom_nodes_plan.py
+  tools\sync_remote_resources.py
   tools\sync_remote_custom_nodes.py
+  tools\remote_custom_node_import_smoke.py
+  tools\install_remote_custom_node_dependencies.py
 
 result: pass
 ```
@@ -43,6 +47,18 @@ Remote package sync:
 package: ComfyUI-Remote-Sampling
 remote: /home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling
 check: ready_for_import_smoke
+```
+
+Final remote package sync:
+
+```text
+output: transfer\phase8_remote_sampling_sync_report_v2.json
+summary:
+  synced: 1
+
+output: transfer\phase8_remote_sampling_environment_report_v2.json
+summary:
+  ready_for_import_smoke: 1
 ```
 
 ## Known Remaining Work

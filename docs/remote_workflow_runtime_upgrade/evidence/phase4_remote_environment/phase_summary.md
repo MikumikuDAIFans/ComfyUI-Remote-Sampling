@@ -28,7 +28,7 @@
 | Integration | pass | Route-generated LoRA workflow plan detected two custom node packages and checked them on remote. |
 | Gray | pass | Synthetic missing package produced `sync_required`; synthetic incomplete remote package produced fatal `remote_package_incomplete`. |
 | Sync | pass | Synthetic package was archived, uploaded, extracted on remote, then checked as `ready_for_import_smoke`. |
-| Real | partial pass | Real LoRA workflow package plan maps `Lora Loader (LoraManager)` to `comfyui-lora-manager` and `WeiLinPromptUIWithoutLora` to `WeiLin-Comfyui-Tools`; both remote directories exist with `__init__.py`. |
+| Real | pass | Real LoRA workflow package plan maps `Lora Loader (LoraManager)` to `comfyui-lora-manager` and `WeiLinPromptUIWithoutLora` to `WeiLin-Comfyui-Tools`; remote import smoke confirms both classes appear in object_info. |
 
 ## Route Evidence
 
@@ -96,8 +96,35 @@ summary:
   ready_for_import_smoke: 1
 ```
 
+## Import Smoke Evidence
+
+Real LoRA custom nodes:
+
+```text
+output: docs\remote_workflow_runtime_upgrade\evidence\phase4_remote_environment\real_lora_remote_custom_node_import_smoke.json
+summary:
+  class_count: 2
+  missing_class_count: 0
+  object_info_count: 819
+classes:
+  Lora Loader (LoraManager)
+  WeiLinPromptUIWithoutLora
+```
+
+The smoke starts remote ComfyUI only when needed and stops it afterward if it started the service.
+
+## Dependency Install Planning
+
+```text
+output: docs\remote_workflow_runtime_upgrade\evidence\phase4_remote_environment\real_lora_dependency_install_dry_run.json
+summary:
+  command_count: 2
+  executed: false
+  failed: 0
+```
+
+Dependency installation defaults to dry-run to avoid unapproved network installation. The guarded route records the dry-run report and requires explicit `allow_remote_dependency_install: true` before executing pip commands.
+
 ## Remaining Phase 4 Work
 
-- Add dependency installation execution/reporting for packages with `requirements.txt` or `pyproject.toml`.
-- Add remote ComfyUI import/object_info smoke when the remote runtime service is started.
-- Integrate environment check and sync into the eventual workflow-level run orchestration instead of using standalone tools only.
+- Add ComfyUI Manager/git fallback execution for packages that cannot be synced from local source.

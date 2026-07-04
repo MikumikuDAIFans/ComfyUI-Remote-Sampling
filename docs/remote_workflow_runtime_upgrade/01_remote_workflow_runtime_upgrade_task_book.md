@@ -4,7 +4,7 @@
 
 - Plan ID: `remote-workflow-runtime-upgrade`
 - Version: `v1`
-- Last updated: `2026-07-05 00:56 +08:00`
+- Last updated: `2026-07-05 04:08 +08:00`
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_workflow_runtime_upgrade\01_remote_workflow_runtime_upgrade_task_book.md`
 - Related handoff file: none
 - Current branch: `main`
@@ -311,17 +311,17 @@
 
 ## 进度台账
 
-- Overall progress: Phase 0、Phase 1、Phase 2、Phase 3 已完成。Phase 4 已完成 custom node plan、远端环境检查、缺失包打包同步工具和灰度验证。Phase 5 已完成 workflow-level convert route 和每次运行专属 conversion bundle。Phase 6 已完成 workflow-level `Run Guarded` 最小闭环和低步数 smoke。Phase 7 已完成缺失 LoRA fail-closed、真实 LoRA smoke、clean 20-step formal run 和远端无图片验证。当前进入 Phase 8：文档、最终检查、提交推送。
+- Overall progress: Phase 0、Phase 1、Phase 2、Phase 3 已完成。Phase 4 已完成 custom node plan、远端环境检查、缺失包打包同步、依赖安装 dry-run/显式执行机制、远端 object_info import smoke。Phase 5 已完成 workflow-level convert route 和每次运行专属 conversion bundle。Phase 6 已完成 backend guarded `/remote_workflow/runtime/run`，包含资源 diff/sync、自定义节点 env/sync、依赖计划、import smoke、转换、queue-ready bundle。Phase 7 已完成缺失 LoRA fail-closed、真实 LoRA smoke、clean animal 20-step、clean formal 20-step 和远端无图片验证。当前进入 Phase 8：最终检查、提交推送。
 - Phase 0: done
 - Phase 1: done
 - Phase 2: done
 - Phase 3: done
-- Phase 4: in progress
-- Phase 5: partial done
-- Phase 6: partial done
-- Phase 7: partial done
+- Phase 4: done for current supported scope
+- Phase 5: done
+- Phase 6: done for current guarded backend scope
+- Phase 7: done for current validation slice
 - Phase 8: done for current upgrade slice
-- Validation status: Phase 0 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 1 unit/contract/integration/gray/real/Zero-Short validation passed-with-boundary for plan-only controller. Phase 2 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 3 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 4 custom-node planning/check/sync validation passed; dependency install and remote import smoke remain open. Phase 5 conversion-plan route validation passed for clean and LoRA workflows. Phase 6 guarded run smoke passed with remote privacy check. Phase 7 fail-closed, LoRA smoke, and clean formal 20-step validation passed. Phase 8 final py_compile, diff check, docs update, and remote package sync passed.
+- Validation status: Phase 0 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 1 unit/contract/integration/gray/real/Zero-Short validation passed-with-boundary for plan-only controller. Phase 2 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 3 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 4 custom-node planning/check/sync, dependency dry-run, and remote import smoke validation passed. Phase 5 conversion-plan route validation passed for clean and LoRA workflows. Phase 6 guarded backend `/run` smoke, resource sync gray, and remote privacy validation passed. Phase 7 fail-closed, LoRA smoke, clean animal 20-step, and clean formal 20-step validation passed. Phase 8 final checks need rerun after latest changes.
 - Residual risks:
   - 自定义节点跨 Windows/Linux 兼容性是最大风险。
   - 模型同步体积和耗时可能显著影响 UX。
@@ -329,7 +329,7 @@
 
 ## 下一步动作
 
-执行 git add、commit、push，并确认 GitHub remote head。
+执行最终 `py_compile`、`git diff --check`、同步远端包、git add、commit、push，并确认 GitHub remote head。
 
 ## 执行日志
 
@@ -343,3 +343,4 @@
 - 2026-07-05 00:42 +08:00: Phase 6 guarded run smoke 部分完成。前端新增 `Run Guarded`，流程为当前画布 prompt -> `/remote_workflow/runtime/convert` -> `/prompt` queue。低步数 clean workflow 成功完成，prompt id `1bbf6eb8-a187-480d-8e37-baae572dfbec`，本地 job `remote_sampling_20260705_003734_07f1b496_phase6_guarded_smoke_20260705_003730_500` 记录完整 upload/sampling/download metrics；远端 job/output 无 PNG/JPG/JPEG/WEBP，8197 和 locks 清空。证据写入 `docs/remote_workflow_runtime_upgrade/evidence/phase6_progress_recovery/`。
 - 2026-07-05 00:50 +08:00: Phase 7 真实验证部分完成。缺失 LoRA workflow 在 `/remote_workflow/runtime/convert` 阶段 HTTP 400 fail-closed，未创建 job；真实 LoRA workflow guarded smoke 成功，profile 只含 Aella/xcn，远端 preflight 清单精确匹配；clean 20-step guarded formal run 成功且 profile LoRA count 为 0；Phase 7 成功 job 的远端 job/output 均无 PNG/JPG/JPEG/WEBP。证据写入 `docs/remote_workflow_runtime_upgrade/evidence/phase7_real_validation/`。
 - 2026-07-05 00:56 +08:00: Phase 8 当前升级切片完成。README、usage、conversion rules 更新为 workflow-level plugin 定位；`.gitignore` 排除 Playwright MCP 临时目录；本地和远端 `ComfyUI-Remote-Sampling` 包已同步；最终 `py_compile` 和 `git diff --check` 通过。证据写入 `docs/remote_workflow_runtime_upgrade/evidence/phase8_release/`。
+- 2026-07-05 04:08 +08:00: 继续补齐目标缺口。新增 `tools/sync_remote_resources.py`、`tools/remote_custom_node_import_smoke.py`、`tools/install_remote_custom_node_dependencies.py`；新增 `/remote_workflow/runtime/run` guarded backend path，前端 `Run Guarded` 改为调用该 route 后再 queue。真实 smoke `guarded_v2b_smoke_20260705_034610` 成功，manifest 含 source/analysis/resources diff/env/conversion/status hash；真实 LoRA guarded prepare `workflow_runtime_20260705_040251_7f49bf25` 含 dependency dry-run hash 和 import smoke hash；缺失 LoRA 在 `/run` 阶段 HTTP 400 且未创建 job；clean animal 20-step `guarded_clean_animal20_20260705_035631` 成功，LoRA count 为 0，输出为红熊猫且远端无图片输出。
