@@ -31,9 +31,44 @@ http://127.0.0.1:8188
 Remote_Sampling_local
 ```
 
-4. 推荐正式入口：在本地 ComfyUI 打开原始 workflow 后，使用右下角 `Remote Sampling` 面板里的 `Run Current Workflow`。
+4. 推荐正式入口：在本地 ComfyUI 打开原始 workflow 后，优先使用 `Remote Workflow Runtime` 面板。
 
-这个入口会从当前画布生成 API prompt，调用本地 `/remote_sampling/convert`，即时转换并审计，然后把 converted prompt 提交到 ComfyUI 队列。每次运行都会生成新的 run bundle：
+可用按钮：
+
+- `Plan Current Workflow`：只分析当前画布，生成 `workflow_analysis.json`、`resources_plan.json`、`custom_nodes_plan.json`，不排队。
+- `Convert`：从当前画布重新生成本次专属 `converted_local_prompt.json` 和 `remote_execution_plan.json`，不排队。
+- `Run Guarded`：从当前画布重新转换，审计通过后把 converted prompt 提交到 ComfyUI 队列。
+
+旧的 `Remote Sampling` 面板 `Run Current Workflow` 仍保留为兼容入口，但后续正式能力会优先落在 `Remote Workflow Runtime`。
+
+5. `Run Guarded` 每次运行都会生成新的 workflow-level run bundle：
+
+```text
+F:\TieguoDun\Remote_comfyui\runs\workflow_runtime_<timestamp>_<id>
+```
+
+bundle 中包含：
+
+```text
+source_prompt.json
+source_workflow.json
+workflow_analysis.json
+resources_plan.json
+custom_nodes_plan.json
+converted_local_prompt.json
+remote_execution_plan.json
+manifest.json
+```
+
+随后底层 remote sampling node 仍会生成 job bundle：
+
+```text
+F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_<timestamp>_<id>_<sampler_id>
+```
+
+其中 `status.json`、`events.jsonl`、`job.json.local.metrics` 记录上传、采样、下载和总耗时。
+
+兼容入口会从当前画布生成 API prompt，调用本地 `/remote_sampling/convert`，即时转换并审计，然后把 converted prompt 提交到 ComfyUI 队列。每次运行都会生成旧格式 run bundle：
 
 ```text
 F:\TieguoDun\Remote_comfyui\runs\runtime_<timestamp>_<id>
@@ -55,7 +90,7 @@ audit.txt
 
 缓存策略：当前版本默认每次运行重新转换。后续如果启用缓存，cache key 必须至少包含 source prompt SHA256、converter version、policy version、custom node version 和 model/LoRA chain summary hash；任何字段不一致都必须重新转换。
 
-5. 手写或调试时，也可以在本地 workflow 中直接使用 `Remote_Sampling_local` 替代普通 `KSampler`。
+6. 手写或调试时，也可以在本地 workflow 中直接使用 `Remote_Sampling_local` 替代普通 `KSampler`。
 
 手写调试时常用参数：
 
@@ -70,7 +105,7 @@ timeout_sec: 3600
 
 节点运行时也会保护你：`Remote_Sampling_local` 默认拒绝 `anima_qwen_aella_xcn` 这类 fixed profile，旧 workflow 会在上传 latent 前失败。只有确认本次运行确实要使用这个固定 profile 时，才把节点的 `allow_fixed_profile` 设为 `true`。
 
-6. 结束后停止远端服务：
+7. 结束后停止远端服务：
 
 ```powershell
 python F:\TieguoDun\Remote_comfyui\tools\remote_comfy_service.py stop

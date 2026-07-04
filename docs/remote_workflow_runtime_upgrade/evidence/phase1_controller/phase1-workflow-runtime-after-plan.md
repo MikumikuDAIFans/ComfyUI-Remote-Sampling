@@ -1,0 +1,120 @@
+- generic [active] [ref=e1] [box=0,0,1377,715]:
+  - main [ref=e9] [box=0,0,1377,715]:
+    - generic [ref=e10] [box=0,0,1377,715]:
+      - generic "Progress Bar by rgthree. right-click for rgthree menu." [ref=e12] [box=0,0,1377,16]:
+        - generic [ref=e14] [box=0,0,1377,16]: Idle
+      - generic [ref=e17] [box=0,675,1377,40]:
+        - generic [ref=e18] [box=5,680,90,30]:
+          - generic [ref=e19] [box=10,686,80,17]: ↹ Resize Feed
+          - generic [box=5,710,300,0]:
+            - generic "Controls the maximum size of the image feed panel (25vh)" [box=5,710,300,0]
+            - generic "Controls the number of columns in the feed (4 columns). Click label to set custom value." [box=5,710,300,0]
+        - generic [ref=e20] [box=1258,680,114,30]:
+          - button "Clear" [ref=e21] [cursor=pointer] [box=1258,680,76,30]
+          - button "❌" [ref=e22] [cursor=pointer] [box=1342,680,30,30]
+      - generic [ref=e23] [box=0,16,1377,654]:
+        - text: .. .. .. ▼ ▼
+        - generic [box=0,16,1377,654]:
+          - generic [ref=e26] [box=0,16,1377,37]:
+            - group [ref=e30] [box=0,16,168,37]
+            - button "创建空白工作流" [ref=e39] [cursor=pointer] [box=168,16,37,37]
+          - generic [box=0,54,1377,616]:
+            - navigation [ref=e42] [box=0,54,59,616]
+            - generic [box=59,54,1318,616]
+        - generic [box=374,115,1239,588]:
+          - generic [ref=e192] [box=1526,376,270,405]:
+            - generic [ref=e193] [box=1526,376,270,405]
+            - button "从右下角调整大小" [ref=e230] [box=1782,767,18,18]
+            - button "从右上角调整大小" [ref=e233] [box=1782,372,18,18]
+            - button "从左下角调整大小" [ref=e236] [box=1523,767,18,18]
+            - button "从左上角调整大小" [ref=e239] [box=1523,372,18,18]
+          - generic [ref=e242] [box=158,466,306,179]:
+            - generic [ref=e243] [box=158,466,306,154]
+            - button "显示高级输入" [ref=e294] [cursor=pointer] [box=158,602,306,43]
+            - button "从右下角调整大小" [ref=e297] [box=450,631,18,18]
+            - button "从右上角调整大小" [ref=e300] [box=450,462,18,18]
+            - button "从左下角调整大小" [ref=e303] [box=155,631,18,18]
+            - button "从左上角调整大小" [ref=e306] [box=155,462,18,18]
+          - generic [ref=e309] [box=968,718,288,124]:
+            - generic [ref=e310] [box=968,718,288,124]
+            - button "从右下角调整大小" [ref=e345] [box=1242,828,18,18]
+            - button "从右上角调整大小" [ref=e348] [box=1242,714,18,18]
+            - button "从左下角调整大小" [ref=e351] [box=965,828,18,18]
+            - button "从左上角调整大小" [ref=e354] [box=965,714,18,18]
+          - generic [ref=e357] [box=1292,376,203,113]:
+            - generic [ref=e358] [box=1292,376,203,113]
+            - button "从右下角调整大小" [ref=e388] [box=1480,475,18,18]
+            - button "从右上角调整大小" [ref=e391] [box=1480,372,18,18]
+            - button "从左下角调整大小" [ref=e394] [box=1289,475,18,18]
+            - button "从左上角调整大小" [ref=e397] [box=1289,372,18,18]
+          - generic [ref=e400] [box=158,187,342,148]:
+            - generic [ref=e401] [box=158,187,342,123]
+            - button "显示高级输入" [ref=e437] [cursor=pointer] [box=158,292,342,43]
+            - button "从右下角调整大小" [ref=e440] [box=486,321,18,18]
+            - button "从右上角调整大小" [ref=e443] [box=486,183,18,18]
+            - button "从左下角调整大小" [ref=e446] [box=155,321,18,18]
+            - button "从左上角调整大小" [ref=e449] [box=155,183,18,18]
+          - generic [ref=e452] [box=527,349,369,171]:
+            - generic [ref=e453] [box=527,349,369,171]
+            - button "从右下角调整大小" [ref=e486] [box=882,506,18,18]
+            - button "从右上角调整大小" [ref=e489] [box=882,345,18,18]
+            - button "从左下角调整大小" [ref=e492] [box=524,506,18,18]
+            - button "从左上角调整大小" [ref=e495] [box=524,345,18,18]
+          - generic [ref=e498] [box=653,718,234,178]:
+            - generic [ref=e499] [box=653,718,234,178]
+            - button "从右下角调整大小" [ref=e568] [box=873,882,18,18]
+            - button "从右上角调整大小" [ref=e571] [box=873,714,18,18]
+            - button "从左下角调整大小" [ref=e574] [box=650,882,18,18]
+            - button "从左上角调整大小" [ref=e577] [box=650,714,18,18]
+          - generic [ref=e580] [box=572,187,279,121]:
+            - generic [ref=e581] [box=572,187,279,121]
+            - button "从右下角调整大小" [ref=e624] [box=837,293,18,18]
+            - button "从右上角调整大小" [ref=e627] [box=837,183,18,18]
+            - button "从左下角调整大小" [ref=e630] [box=569,293,18,18]
+            - button "从左上角调整大小" [ref=e633] [box=569,183,18,18]
+          - generic [ref=e636] [box=968,376,284,334]:
+            - generic [ref=e637] [box=968,376,284,334]
+            - button "从右下角调整大小" [ref=e777] [box=1237,696,18,18]
+            - button "从右上角调整大小" [ref=e780] [box=1237,372,18,18]
+            - button "从左下角调整大小" [ref=e783] [box=965,696,18,18]
+            - button "从左上角调整大小" [ref=e786] [box=965,372,18,18]
+          - generic [ref=e789] [box=527,556,365,153]:
+            - generic [ref=e790] [box=527,556,365,153]
+            - button "从右下角调整大小" [ref=e823] [box=878,695,18,18]
+            - button "从右上角调整大小" [ref=e826] [box=878,552,18,18]
+            - button "从左下角调整大小" [ref=e829] [box=524,695,18,18]
+            - button "从左上角调整大小" [ref=e832] [box=524,552,18,18]
+    - text: 
+  - text: ×
+  - generic [ref=e838] [cursor=pointer] [box=28,638,50,20]: WeiLin
+  - generic [ref=e840] [box=589,0,192,30]:
+    - img [ref=e842] [box=592,7,16,16]
+    - generic [ref=e846] [box=610,1,150,28]:
+      - button "API-key" [ref=e847] [cursor=pointer] [box=610,1,30,28]:
+        - img [ref=e848] [box=616,7,16,16]
+      - button "FastAPI" [ref=e850] [cursor=pointer] [box=640,1,30,28]:
+        - img [ref=e851] [box=646,7,16,16]
+      - button "Streamlit" [ref=e854] [cursor=pointer] [box=670,1,30,28]:
+        - img [ref=e855] [box=676,7,16,16]
+      - button "Workflow" [ref=e857] [cursor=pointer] [box=700,1,30,28]:
+        - img [ref=e858] [box=706,7,16,16]
+      - button "About" [ref=e861] [cursor=pointer] [box=730,1,30,28]:
+        - img [ref=e862] [box=736,7,16,16]
+    - button "Close" [ref=e864] [cursor=pointer] [box=760,1,20,28]:
+      - img [ref=e865] [box=762,7,16,16]
+  - generic [ref=e867] [box=999,593,360,104]:
+    - generic [ref=e868] [box=1000,594,358,48]:
+      - generic [ref=e869] [box=1012,610,101,14]: Remote Sampling
+      - generic [ref=e870] [box=1128,604,218,27]:
+        - button "Run Current Workflow" [ref=e871] [cursor=pointer] [box=1128,604,161,27]
+        - button "Hide" [ref=e872] [cursor=pointer] [box=1297,604,49,27]
+    - generic [ref=e874] [box=1012,652,334,32]: Ready. Uses the current graph, converts it at runtime, audits it, then queues the converted prompt.
+  - generic [ref=e875] [box=969,206,390,371]:
+    - generic [ref=e876] [box=970,207,388,63]:
+      - generic [ref=e877] [box=982,224,145,28]: Remote Workflow Runtime
+      - generic [ref=e878] [box=1137,217,209,42]:
+        - button "Plan Current Workflow" [ref=e879] [cursor=pointer] [box=1137,217,152,42]
+        - button "Hide" [ref=e880] [cursor=pointer] [box=1297,217,49,42]
+    - generic [ref=e888] [box=982,280,364,284]:
+      - text: Workflow runtime plan generated.
+      - generic [ref=e889] [box=982,304,364,260]: "run_id: workflow_runtime_20260704_235151_9011d0c2 run_dir: F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260704_235151_9011d0c2 source_prompt_sha256: 49102199cf8b7c441cd944ef991e2238af883ec54422004bee26e98a35533fb0 workflow_analysis_sha256: 208c42f0cc1643c09fca1b371aabf24150d731e5d856a5f1e5b29e91369de3f7 nodes: 10 samplers: 1 custom node classes: 2 samplers: - node 70: KSampler custom node classes: - EmptySD3LatentImage - ModelSamplingAuraFlow warnings: - Phase 1 analysis is intentionally shallow. Full model, LoRA, resource and custom-node dependency analysis begins in Phase 2."

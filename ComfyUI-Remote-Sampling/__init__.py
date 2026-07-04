@@ -7,6 +7,7 @@ from .nodes.remote_sampling_local import RemoteSamplingLocal
 from .nodes.remote_sampling_remote import RemoteSamplingRemote
 from .protocol import read_json
 from .runtime_conversion import CONVERTER_VERSION, POLICY_VERSION, convert_runtime_prompt
+from .workflow_runtime import create_workflow_runtime_conversion, create_workflow_runtime_plan, workflow_runtime_status
 
 
 NODE_CLASS_MAPPINGS = {
@@ -110,6 +111,57 @@ async def remote_sampling_runtime_convert(request):
         if not isinstance(payload, dict):
             raise TypeError("JSON body must be an object")
         result = convert_runtime_prompt(payload)
+        status = 200 if result.get("ok") else 400
+        return web.json_response(result, status=status, headers={"Cache-Control": "no-store"})
+    except Exception as error:
+        return web.json_response(
+            {
+                "ok": False,
+                "error": {
+                    "type": error.__class__.__name__,
+                    "message": str(error),
+                },
+            },
+            status=500,
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+@PromptServer.instance.routes.get("/remote_workflow/runtime/status")
+async def remote_workflow_runtime_status(request):
+    return web.json_response(workflow_runtime_status(), headers={"Cache-Control": "no-store"})
+
+
+@PromptServer.instance.routes.post("/remote_workflow/runtime/plan")
+async def remote_workflow_runtime_plan(request):
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise TypeError("JSON body must be an object")
+        result = create_workflow_runtime_plan(payload)
+        status = 200 if result.get("ok") else 400
+        return web.json_response(result, status=status, headers={"Cache-Control": "no-store"})
+    except Exception as error:
+        return web.json_response(
+            {
+                "ok": False,
+                "error": {
+                    "type": error.__class__.__name__,
+                    "message": str(error),
+                },
+            },
+            status=500,
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+@PromptServer.instance.routes.post("/remote_workflow/runtime/convert")
+async def remote_workflow_runtime_convert(request):
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise TypeError("JSON body must be an object")
+        result = create_workflow_runtime_conversion(payload)
         status = 200 if result.get("ok") else 400
         return web.json_response(result, status=status, headers={"Cache-Control": "no-store"})
     except Exception as error:

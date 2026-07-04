@@ -1,6 +1,6 @@
-# ComfyUI Remote Sampling
+# ComfyUI Remote Workflow Runtime
 
-This project contains a ComfyUI custom node prototype that offloads the sampling stage to a remote Linux server while keeping image encode/decode on the local machine.
+This project is evolving from a single remote-sampling custom node into a workflow-level ComfyUI plugin. Its purpose is to run the sampling stage on a remote Linux server while keeping image input, VAE encode/decode, workflow editing, WebUI interaction, and final image output on the local machine.
 
 The intended privacy boundary is:
 
@@ -8,14 +8,29 @@ The intended privacy boundary is:
 - remote server: model loading, LoRA loading, latent sampling, latent transfer
 - remote server should not read or save RGB input/output images for remote sampling jobs
 
-The custom node package is in `ComfyUI-Remote-Sampling`.
+The plugin package is in `ComfyUI-Remote-Sampling`.
+
+The recommended user-facing entry is the local ComfyUI floating panel:
+
+- `Plan Current Workflow`: analyze the current graph, list model/LoRA/custom-node dependencies, and create an audit bundle without queueing.
+- `Convert`: generate a fresh per-run converted prompt and remote execution plan without queueing.
+- `Run Guarded`: convert the current graph at runtime, audit the result, then queue the converted prompt.
+
+Do not use old converted workflow files as the formal entry point. The workflow-level path is designed to convert from the current source prompt for every run, preventing stale LoRA/profile contamination.
 
 ## Main Components
 
 - `Remote_Sampling_local`: local ComfyUI node that receives conditioning, latent and sampler parameters, submits a remote sampling job, downloads the output latent, and returns `LATENT`.
 - `Remote_Sampling_remote`: remote ComfyUI node that performs sampling and writes progress/status data for the local bridge.
+- `workflow_runtime.py`: workflow-level planner/converter routes for the floating panel.
+- `workflow_analyzer.py`: extracts samplers, model chains, CLIP, VAE, LoRA, unsupported nodes, and custom node classes from the current API prompt.
+- `resource_planner.py`: maps local model/LoRA/CLIP/VAE resources to mirrored remote paths.
+- `custom_node_planner.py`: maps workflow custom node classes to local packages and remote `custom_nodes` targets.
 - `tools/remote_sampling_job_cli.py`: bridge CLI for preflight checks, latent upload/download, remote prompt submission, progress polling, reports and remote service locking.
 - `tools/convert_ksampler_to_remote_sampling.py`: workflow converter that replaces `KSampler` nodes with `Remote_Sampling_local` and can generate remote profiles.
+- `tools/check_remote_resource_plan.py`: checks planned model resources on the remote server.
+- `tools/check_remote_custom_nodes_plan.py`: checks planned custom node packages on the remote server.
+- `tools/sync_remote_custom_nodes.py`: archives local custom node packages and extracts them under remote `ComfyUI/custom_nodes`.
 
 ## Current Monitoring Features
 
@@ -31,13 +46,37 @@ The local node keeps its first output as `LATENT` for workflow compatibility.
 
 ## Resource Preflight
 
-Before uploading latent inputs, the bridge checks the remote profile resources:
+Before uploading latent inputs, the system checks resources in two layers:
+
+- workflow-level planning records required resources and remote targets
+- node-level bridge preflight checks the remote profile before latent upload
 
 - UNET
 - CLIP
+- VAE in workflow-level planning
 - LoRA
 
 If resources are missing, the job fails before latent upload and reports expected remote paths plus upload command hints.
+
+Model and LoRA paths are mirrored by relative path, for example:
+
+```text
+local:  ComfyUI/models/loras/Anima/角色/example.safetensors
+remote: /home/user02/remote_ComfyUI/ComfyUI/models/loras/Anima/角色/example.safetensors
+```
+
+## Workflow-Level Guardrails
+
+The workflow runtime is fail-closed by default:
+
+- missing local model/LoRA resources block conversion
+- unsupported model or CLIP chains block conversion
+- fixed debug profiles such as `anima_qwen_aella_xcn` are refused unless explicitly allowed
+- remote RGB image nodes remain forbidden for remote sampling jobs
+- each workflow run writes a fresh bundle under `runs/workflow_runtime_<timestamp>_<id>`
+- converted prompts and profile snapshots are hashed and tied to the source prompt hash
+
+Current supported conversion scope is intentionally narrow: base `KSampler`, `UNETLoader`, `CLIPLoader`, `VAELoader`, `LoraLoader`, and `Lora Loader (LoraManager)`. Complex ControlNet/IPAdapter/AnimateDiff/custom sampler flows should fail closed until explicitly supported.
 
 ## Remote Service Locking
 
@@ -58,6 +97,12 @@ See:
 - `docs/plan.md`
 
 Development notes, task books and goal prompts are collected in `docs/`.
+
+The long-running workflow-runtime upgrade plan and evidence are in:
+
+```text
+docs/remote_workflow_runtime_upgrade/
+```
 
 ## Environment-Specific Defaults
 

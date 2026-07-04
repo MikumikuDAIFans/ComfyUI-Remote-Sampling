@@ -1,0 +1,19 @@
+{
+  "schema_version": "custom-nodes-plan-v1",
+  "remote_base": "/home/user02/remote_ComfyUI",
+  "remote_custom_nodes_root": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes",
+  "classes": [],
+  "packages": [
+    {
+      "package_name": "remote-sampling-phase4-sync-node",
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\transfer\\phase4_synthetic_custom_node\\remote-sampling-phase4-sync-node",
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/remote-sampling-phase4-sync-node",
+      "git_remote": null,
+      "dependency_files": [],
+      "classes": ["SyntheticSyncNode"]
+    }
+  ],
+  "summary": {"custom_class_count": 1, "package_count": 1, "local_package_missing": 0, "needs_remote_check": 1},
+  "errors": [],
+  "fatal": false
+}

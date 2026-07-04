@@ -1,0 +1,27 @@
+{
+  "schema_version": "resources-diff-v1",
+  "checked_at": "2026-07-05 00:10:29",
+  "relative_path_policy": "mirror_local_comfy_models_relative_path",
+  "resources": [
+    {
+      "index": 0,
+      "kind": "lora",
+      "relative_path": "__phase3_remote_missing__.safetensors",
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\README.md",
+      "local_size": 3800,
+      "remote_path": null,
+      "remote_size": null,
+      "remote_exists": false,
+      "action": "upload_required",
+      "upload_command_hint": "synthetic"
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "ready": 0,
+    "upload_required": 1,
+    "size_mismatch": 0,
+    "blocked_local_missing": 0
+  },
+  "fatal": false
+}

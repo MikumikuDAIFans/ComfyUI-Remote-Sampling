@@ -1,0 +1,46 @@
+- generic [active] [ref=e1] [box=0,0,1377,715]:
+  - main [ref=e9] [box=0,0,1377,715]:
+    - generic [ref=e10] [box=0,0,1377,715]:
+      - generic "Progress Bar by rgthree. right-click for rgthree menu." [ref=e12] [box=0,0,1377,16]:
+        - generic [ref=e14] [box=0,0,1377,16]: Idle
+      - generic [ref=e17] [box=0,675,1377,40]:
+        - generic [ref=e18] [box=5,680,90,30]
+        - generic [ref=e20] [box=1258,680,114,30]
+      - generic [ref=e23] [box=0,16,1377,654]:
+        - text: .. .. .. ▼ ▼
+        - generic [box=0,16,1377,654]
+        - generic [box=374,115,1239,588]
+    - text: 
+  - text: ×
+  - generic [ref=e839] [cursor=pointer] [box=28,638,50,20]: WeiLin
+  - generic [ref=e840] [box=589,0,192,30]:
+    - img [ref=e842] [box=592,7,16,16]
+    - generic [ref=e846] [box=610,1,150,28]:
+      - button "API-key" [ref=e847] [cursor=pointer] [box=610,1,30,28]:
+        - img [ref=e848] [box=616,7,16,16]
+      - button "FastAPI" [ref=e850] [cursor=pointer] [box=640,1,30,28]:
+        - img [ref=e851] [box=646,7,16,16]
+      - button "Streamlit" [ref=e854] [cursor=pointer] [box=670,1,30,28]:
+        - img [ref=e855] [box=676,7,16,16]
+      - button "Workflow" [ref=e857] [cursor=pointer] [box=700,1,30,28]:
+        - img [ref=e858] [box=706,7,16,16]
+      - button "About" [ref=e861] [cursor=pointer] [box=730,1,30,28]:
+        - img [ref=e862] [box=736,7,16,16]
+    - button "Close" [ref=e864] [cursor=pointer] [box=760,1,20,28]:
+      - img [ref=e865] [box=762,7,16,16]
+  - generic [ref=e867] [box=999,593,360,104]:
+    - generic [ref=e868] [box=1000,594,358,48]:
+      - generic [ref=e869] [box=1012,610,101,14]: Remote Sampling
+      - generic [ref=e870] [box=1128,604,218,27]:
+        - button "Run Current Workflow" [ref=e871] [cursor=pointer] [box=1128,604,161,27]
+        - button "Hide" [ref=e872] [cursor=pointer] [box=1297,604,49,27]
+    - generic [ref=e874] [box=1012,652,334,32]: Ready. Uses the current graph, converts it at runtime, audits it, then queues the converted prompt.
+  - generic [ref=e875] [box=969,443,390,134]:
+    - generic [ref=e876] [box=970,444,388,78]:
+      - generic [ref=e877] [box=982,461,56,42]: Remote Workflow Runtime
+      - generic [ref=e878] [box=1048,454,298,57]:
+        - button "Plan Current Workflow" [ref=e879] [cursor=pointer] [box=1048,454,80,57]
+        - button "Convert" [ref=e880] [cursor=pointer] [box=1136,454,70,57]
+        - button "Run Guarded" [ref=e881] [cursor=pointer] [box=1214,454,75,57]
+        - button "Hide" [ref=e882] [cursor=pointer] [box=1297,454,49,57]
+    - generic [ref=e884] [box=982,532,364,32]: Ready. Planning creates a workflow-level bundle without sampling or latent upload.

@@ -1,0 +1,60 @@
+- generic [active] [ref=e1] [box=0,0,1377,715]:
+  - main [ref=e9] [box=0,0,1377,715]:
+    - generic [ref=e10] [box=0,0,1377,715]:
+      - generic "Progress Bar by rgthree. right-click for rgthree menu." [ref=e12] [box=0,0,1377,16]:
+        - generic [ref=e14] [box=0,0,1377,16]: Idle
+      - generic [ref=e17] [box=0,675,1377,40]:
+        - generic [ref=e18] [box=5,680,90,30]:
+          - generic [ref=e19] [box=10,686,80,17]: ↹ Resize Feed
+          - generic [box=5,710,300,0]
+        - generic [ref=e20] [box=1258,680,114,30]:
+          - button "Clear" [ref=e21] [cursor=pointer] [box=1258,680,76,30]
+          - button "❌" [ref=e22] [cursor=pointer] [box=1342,680,30,30]
+      - generic [ref=e23] [box=0,16,1377,654]:
+        - text: .. .. .. ▼ ▼
+        - generic [box=0,16,1377,654]:
+          - generic [ref=e26] [box=0,16,1377,37]
+          - generic [box=0,54,1377,616]
+        - generic [box=374,115,1239,588]:
+          - generic [ref=e192] [box=1526,376,270,405]
+          - generic [ref=e242] [box=158,466,306,179]
+          - generic [ref=e309] [box=968,718,288,124]
+          - generic [ref=e357] [box=1292,376,203,113]
+          - generic [ref=e400] [box=158,187,342,148]
+          - generic [ref=e452] [box=527,349,369,171]
+          - generic [ref=e498] [box=653,718,234,178]
+          - generic [ref=e580] [box=572,187,279,121]
+          - generic [ref=e636] [box=968,376,284,334]
+          - generic [ref=e789] [box=527,556,365,153]
+    - text: 
+  - text: ×
+  - generic [ref=e838] [cursor=pointer] [box=28,638,50,20]: WeiLin
+  - generic [ref=e840] [box=999,593,360,104]:
+    - generic [ref=e841] [box=1000,594,358,48]:
+      - generic [ref=e842] [box=1012,610,101,14]: Remote Sampling
+      - generic [ref=e843] [box=1128,604,218,27]:
+        - button "Run Current Workflow" [ref=e844] [cursor=pointer] [box=1128,604,161,27]
+        - button "Hide" [ref=e845] [cursor=pointer] [box=1297,604,49,27]
+    - generic [ref=e847] [box=1012,652,334,32]: Ready. Uses the current graph, converts it at runtime, audits it, then queues the converted prompt.
+  - generic [ref=e848] [box=969,458,390,119]:
+    - generic [ref=e849] [box=970,459,388,63]:
+      - generic [ref=e850] [box=982,476,145,28]: Remote Workflow Runtime
+      - generic [ref=e851] [box=1137,469,209,42]:
+        - button "Plan Current Workflow" [ref=e852] [cursor=pointer] [box=1137,469,152,42]
+        - button "Hide" [ref=e853] [cursor=pointer] [box=1297,469,49,42]
+    - generic [ref=e855] [box=982,532,364,32]: Ready. Phase 1 creates a workflow-level plan bundle without sampling or resource sync.
+  - generic [ref=e856] [box=589,0,192,30]:
+    - img [ref=e858] [box=592,7,16,16]
+    - generic [ref=e862] [box=610,1,150,28]:
+      - button "API-key" [ref=e863] [cursor=pointer] [box=610,1,30,28]:
+        - img [ref=e864] [box=616,7,16,16]
+      - button "FastAPI" [ref=e866] [cursor=pointer] [box=640,1,30,28]:
+        - img [ref=e867] [box=646,7,16,16]
+      - button "Streamlit" [ref=e870] [cursor=pointer] [box=670,1,30,28]:
+        - img [ref=e871] [box=676,7,16,16]
+      - button "Workflow" [ref=e873] [cursor=pointer] [box=700,1,30,28]:
+        - img [ref=e874] [box=706,7,16,16]
+      - button "About" [ref=e877] [cursor=pointer] [box=730,1,30,28]:
+        - img [ref=e878] [box=736,7,16,16]
+    - button "Close" [ref=e880] [cursor=pointer] [box=760,1,20,28]:
+      - img [ref=e881] [box=762,7,16,16]

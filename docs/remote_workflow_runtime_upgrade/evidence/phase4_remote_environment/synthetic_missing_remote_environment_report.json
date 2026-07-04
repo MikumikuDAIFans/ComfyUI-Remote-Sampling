@@ -1,0 +1,29 @@
+{
+  "schema_version": "remote-environment-report-v1",
+  "checked_at": "2026-07-05 00:25:31",
+  "remote_base": "/home/user02/remote_ComfyUI",
+  "remote_custom_nodes_root": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes",
+  "packages": [
+    {
+      "package_name": "remote-sampling-missing-package-demo",
+      "classes": [
+        "SyntheticMissingNode"
+      ],
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\_synthetic\\remote-sampling-missing-package-demo",
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/remote-sampling-missing-package-demo",
+      "git_remote": null,
+      "remote_exists": false,
+      "remote_init_exists": false,
+      "dependency_files": [],
+      "action": "sync_required",
+      "manual_sync_hint": "Compress \"F:\\TieguoDun\\Remote_comfyui\\_synthetic\\remote-sampling-missing-package-demo\" and extract it to \"/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/remote-sampling-missing-package-demo\"."
+    }
+  ],
+  "summary": {
+    "package_count": 1,
+    "ready_for_import_smoke": 0,
+    "sync_required": 1,
+    "remote_package_incomplete": 0
+  },
+  "fatal": false
+}

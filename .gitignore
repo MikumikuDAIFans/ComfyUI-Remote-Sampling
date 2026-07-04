@@ -66,3 +66,4 @@ logs_local_tunnel_*.err.txt
 Thumbs.db
 .idea/
 .vscode/
+.playwright-mcp/

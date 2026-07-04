@@ -1,0 +1,23 @@
+{
+  "schema_version": "custom-node-sync-report-v1",
+  "synced_at": "2026-07-05 00:27:27",
+  "packages": [
+    {
+      "package_name": "remote-sampling-phase4-sync-node",
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\transfer\\phase4_synthetic_custom_node\\remote-sampling-phase4-sync-node",
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/remote-sampling-phase4-sync-node",
+      "archive": "F:\\TieguoDun\\Remote_comfyui\\transfer\\custom_nodes\\remote-sampling-phase4-sync-node_20260705_002702.zip",
+      "remote_archive": "/home/user02/remote_ComfyUI/transfer/custom_nodes/remote-sampling-phase4-sync-node_20260705_002702.zip",
+      "file_count": 1,
+      "bytes_total": 58,
+      "upload_log_tail": "upload F:\\TieguoDun\\Remote_comfyui\\transfer\\custom_nodes\\remote-sampling-phase4-sync-node_20260705_002702.zip -> /home/user02/remote_ComfyUI/transfer/custom_nodes/remote-sampling-phase4-sync-node_20260705_002702.zip (0/166 bytes)\nremote-sampling-phase4-sync-node_20260705_002702.zip: 0/166 bytes (0.0%)\nremote-sampling-phase4-sync-node_20260705_002702.zip: 166/166 bytes (100.0%)\n",
+      "extract_log_tail": "TUNNEL local=127.0.0.1:10644 jump=company-lab target=10.10.11.97:22\n\n===== cmd-1 =====\nextracted /home/user02/remote_ComfyUI/ComfyUI/custom_nodes/remote-sampling-phase4-sync-node\n__exit_status=0\n",
+      "action": "synced"
+    }
+  ],
+  "summary": {
+    "package_count": 1,
+    "synced": 1
+  },
+  "fatal": false
+}

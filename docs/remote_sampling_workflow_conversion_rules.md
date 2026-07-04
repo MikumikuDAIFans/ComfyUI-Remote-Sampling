@@ -36,7 +36,15 @@
 - 任意前端 workflow JSON 的完整自动转换；当前转换器处理的是 ComfyUI API prompt。
 
 ### 转换脚本
-正式交互式使用优先通过 ComfyUI 前端右下角 `Remote Sampling` 面板的 `Run Current Workflow` 入口运行。该入口会对当前画布即时生成 API prompt、转换、审计、生成 run bundle 并提交 converted prompt，避免用户误打开历史 converted workflow。
+正式交互式使用优先通过 ComfyUI 前端 `Remote Workflow Runtime` 面板运行。
+
+入口：
+
+- `Plan Current Workflow`：生成 workflow-level plan bundle，不排队。
+- `Convert`：生成本次专属 converted prompt 和 remote execution plan，不排队。
+- `Run Guarded`：从当前画布即时生成 API prompt、转换、审计、生成 run bundle，并提交 converted prompt。
+
+旧 `Remote Sampling` 面板的 `Run Current Workflow` 仍保留为兼容入口，但正式工作流级能力以 `Remote Workflow Runtime` 为准。
 
 CLI 转换脚本仍用于调试、批处理和回归验证。
 

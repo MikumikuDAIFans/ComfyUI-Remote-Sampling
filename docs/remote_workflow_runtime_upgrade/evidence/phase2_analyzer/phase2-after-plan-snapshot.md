@@ -1,0 +1,146 @@
+- generic [active] [ref=e1] [box=0,0,1377,715]:
+  - main [ref=e9] [box=0,0,1377,715]:
+    - generic [ref=e10] [box=0,0,1377,715]:
+      - generic "Progress Bar by rgthree. right-click for rgthree menu." [ref=e12] [box=0,0,1377,16]:
+        - generic [ref=e14] [box=0,0,1377,16]: Idle
+      - generic [ref=e17] [box=0,675,1377,40]:
+        - generic [ref=e18] [box=5,680,90,30]:
+          - generic [ref=e19] [box=10,686,80,17]: ↹ Resize Feed
+          - generic [box=5,710,300,0]:
+            - generic "Controls the maximum size of the image feed panel (25vh)" [box=5,710,300,0]
+            - generic "Controls the number of columns in the feed (4 columns). Click label to set custom value." [box=5,710,300,0]
+        - generic [ref=e20] [box=1258,680,114,30]:
+          - button "Clear" [ref=e21] [cursor=pointer] [box=1258,680,76,30]
+          - button "❌" [ref=e22] [cursor=pointer] [box=1342,680,30,30]
+      - generic [ref=e23] [box=0,16,1377,654]:
+        - text: .. .. .. ▼ ▼
+        - generic [box=0,16,1377,654]:
+          - generic [ref=e26] [box=0,16,1377,37]:
+            - group [ref=e30] [box=0,16,168,37]
+            - button "创建空白工作流" [ref=e39] [cursor=pointer] [box=168,16,37,37]
+          - generic [box=0,54,1377,616]:
+            - navigation [ref=e42] [box=0,54,59,616]
+            - generic [box=59,54,1318,616]
+        - generic [box=374,115,1239,588]:
+          - generic [ref=e192] [box=1526,376,270,405]:
+            - generic [ref=e193] [box=1526,376,270,405]
+            - button "从右下角调整大小" [ref=e230] [box=1782,767,18,18]
+            - button "从右上角调整大小" [ref=e233] [box=1782,372,18,18]
+            - button "从左下角调整大小" [ref=e236] [box=1523,767,18,18]
+            - button "从左上角调整大小" [ref=e239] [box=1523,372,18,18]
+          - generic [ref=e242] [box=158,466,306,179]:
+            - generic [ref=e243] [box=158,466,306,154]
+            - button "显示高级输入" [ref=e294] [cursor=pointer] [box=158,602,306,43]
+            - button "从右下角调整大小" [ref=e297] [box=450,631,18,18]
+            - button "从右上角调整大小" [ref=e300] [box=450,462,18,18]
+            - button "从左下角调整大小" [ref=e303] [box=155,631,18,18]
+            - button "从左上角调整大小" [ref=e306] [box=155,462,18,18]
+          - generic [ref=e309] [box=968,718,288,124]:
+            - generic [ref=e310] [box=968,718,288,124]
+            - button "从右下角调整大小" [ref=e345] [box=1242,828,18,18]
+            - button "从右上角调整大小" [ref=e348] [box=1242,714,18,18]
+            - button "从左下角调整大小" [ref=e351] [box=965,828,18,18]
+            - button "从左上角调整大小" [ref=e354] [box=965,714,18,18]
+          - generic [ref=e357] [box=1292,376,203,113]:
+            - generic [ref=e358] [box=1292,376,203,113]
+            - button "从右下角调整大小" [ref=e388] [box=1480,475,18,18]
+            - button "从右上角调整大小" [ref=e391] [box=1480,372,18,18]
+            - button "从左下角调整大小" [ref=e394] [box=1289,475,18,18]
+            - button "从左上角调整大小" [ref=e397] [box=1289,372,18,18]
+          - generic [ref=e400] [box=158,187,342,148]:
+            - generic [ref=e401] [box=158,187,342,123]
+            - button "显示高级输入" [ref=e437] [cursor=pointer] [box=158,292,342,43]
+            - button "从右下角调整大小" [ref=e440] [box=486,321,18,18]
+            - button "从右上角调整大小" [ref=e443] [box=486,183,18,18]
+            - button "从左下角调整大小" [ref=e446] [box=155,321,18,18]
+            - button "从左上角调整大小" [ref=e449] [box=155,183,18,18]
+          - generic [ref=e452] [box=527,349,369,171]:
+            - generic [ref=e453] [box=527,349,369,171]
+            - button "从右下角调整大小" [ref=e486] [box=882,506,18,18]
+            - button "从右上角调整大小" [ref=e489] [box=882,345,18,18]
+            - button "从左下角调整大小" [ref=e492] [box=524,506,18,18]
+            - button "从左上角调整大小" [ref=e495] [box=524,345,18,18]
+          - generic [ref=e498] [box=653,718,234,178]:
+            - generic [ref=e499] [box=653,718,234,178]
+            - button "从右下角调整大小" [ref=e568] [box=873,882,18,18]
+            - button "从右上角调整大小" [ref=e571] [box=873,714,18,18]
+            - button "从左下角调整大小" [ref=e574] [box=650,882,18,18]
+            - button "从左上角调整大小" [ref=e577] [box=650,714,18,18]
+          - generic [ref=e580] [box=572,187,279,121]:
+            - generic [ref=e581] [box=572,187,279,121]
+            - button "从右下角调整大小" [ref=e624] [box=837,293,18,18]
+            - button "从右上角调整大小" [ref=e627] [box=837,183,18,18]
+            - button "从左下角调整大小" [ref=e630] [box=569,293,18,18]
+            - button "从左上角调整大小" [ref=e633] [box=569,183,18,18]
+          - generic [ref=e636] [box=968,376,284,334]:
+            - generic [ref=e637] [box=968,376,284,334]
+            - button "从右下角调整大小" [ref=e777] [box=1237,696,18,18]
+            - button "从右上角调整大小" [ref=e780] [box=1237,372,18,18]
+            - button "从左下角调整大小" [ref=e783] [box=965,696,18,18]
+            - button "从左上角调整大小" [ref=e786] [box=965,372,18,18]
+          - generic [ref=e789] [box=527,556,365,153]:
+            - generic [ref=e790] [box=527,556,365,153]
+            - button "从右下角调整大小" [ref=e823] [box=878,695,18,18]
+            - button "从右上角调整大小" [ref=e826] [box=878,552,18,18]
+            - button "从左下角调整大小" [ref=e829] [box=524,695,18,18]
+            - button "从左上角调整大小" [ref=e832] [box=524,552,18,18]
+    - text: 
+  - text: ×
+  - generic [ref=e838] [cursor=pointer] [box=28,638,50,20]: WeiLin
+  - generic [ref=e840] [box=999,593,360,104]:
+    - generic [ref=e841] [box=1000,594,358,48]:
+      - generic [ref=e842] [box=1012,610,101,14]: Remote Sampling
+      - generic [ref=e843] [box=1128,604,218,27]:
+        - button "Run Current Workflow" [ref=e844] [cursor=pointer] [box=1128,604,161,27]
+        - button "Hide" [ref=e845] [cursor=pointer] [box=1297,604,49,27]
+    - generic [ref=e847] [box=1012,652,334,32]: Ready. Uses the current graph, converts it at runtime, audits it, then queues the converted prompt.
+  - generic [ref=e848] [box=969,206,390,371]:
+    - generic [ref=e849] [box=970,207,388,63]:
+      - generic [ref=e850] [box=982,224,145,28]: Remote Workflow Runtime
+      - generic [ref=e851] [box=1137,217,209,42]:
+        - button "Plan Current Workflow" [ref=e852] [cursor=pointer] [box=1137,217,152,42]
+        - button "Hide" [ref=e853] [cursor=pointer] [box=1297,217,49,42]
+    - generic [ref=e914] [box=982,280,364,284]:
+      - text: "Workflow runtime planning failed:"
+      - generic [ref=e915] [box=982,304,364,260]: "{ \"ok\": false, \"run_id\": \"workflow_runtime_20260705_000045_3557c9c9\", \"run_dir\": \"F:\\\\TieguoDun\\\\Remote_comfyui\\\\runs\\\\workflow_runtime_20260705_000045_3557c9c9\", \"created_at\": \"2026-07-05 00:00:45\", \"workflow_runtime_version\": \"workflow-runtime-v1\", \"policy_version\": \"workflow-fail-closed-v1\", \"source_prompt\": \"F:\\\\TieguoDun\\\\Remote_comfyui\\\\runs\\\\workflow_runtime_20260705_000045_3557c9c9\\\\source_prompt.json\", \"source_prompt_sha256\": \"49102199cf8b7c441cd944ef991e2238af883ec54422004bee26e98a35533fb0\", \"source_workflow\": \"F:\\\\TieguoDun\\\\Remote_comfyui\\\\runs\\\\workflow_runtime_20260705_000045_3557c9c9\\\\source_workflow.json\", \"source_workflow_sha256\": \"cf4543d96f9f64bd2978815e7c7c6b6af5d3a018abceb1405990dfeef1944a32\", \"workflow_analysis\": \"F:\\\\TieguoDun\\\\Remote_comfyui\\\\runs\\\\workflow_runtime_20260705_000045_3557c9c9\\\\workflow_analysis.json\", \"workflow_analysis_sha256\": \"c739eb642daaceaadf035939deb66db4ce440c9e65f57028fb4125135e888378\", \"workflow_status\": \"F:\\\\TieguoDun\\\\Remote_comfyui\\\\runs\\\\workflow_runtime_20260705_000045_3557c9c9\\\\workflow_status.json\", \"stage\": \"analysis\", \"next_required_phase\": \"Phase 2: Local Workflow Analyzer And Preflight\", \"analysis_summary\": { \"node_count\": 10, \"sampler_count\": 1, \"custom_node_class_count\": 1, \"fatal\": true }, \"errors\": [ { \"type\": \"UnsupportedModelChainNode\", \"message\": \"Unsupported model chain node 69: ModelSamplingAuraFlow\", \"fatal\": true, \"node_id\": \"69\", \"class_type\": \"ModelSamplingAuraFlow\" } ], \"warnings\": [ \"Workflow analysis is local-only in Phase 2; remote resource diff and custom-node installation are handled in later phases.\" ], \"status\": { \"schema_version\": \"workflow-runtime-status-v0\", \"run_id\": \"workflow_runtime_20260705_000045_3557c9c9\", \"stage\": \"analysis\", \"message\": \"Workflow-level runtime plan generated. Resource sync and custom-node sync are not executed in Phase 1.\", \"overall_percent\": 20, \"state_machine\": [ \"idle\", \"local_preflight\", \"analysis\", \"resource_plan\", \"sync\", \"remote_env\", \"convert\", \"queue\", \"sampling\", \"download\", \"decode\", \"complete\", \"failed\" ], \"fatal\": true, \"created_at\": \"2026-07-05 00:00:45\" }, \"analysis\": { \"schema_version\": \"workflow-analysis-v1\", \"models_root\": \"F:\\\\TieguoDun\\\\ComfyUI_NEW\\\\ComfyUI_windows_portable\\\\ComfyUI\\\\models\", \"node_count\": 10, \"class_counts\": { \"CLIPLoader\": 1, \"CLIPTextEncode\": 2, \"EmptySD3LatentImage\": 1, \"KSampler\": 1, \"ModelSamplingAuraFlow\": 1, \"SaveImage\": 1, \"UNETLoader\": 1, \"VAEDecode\": 1, \"VAELoader\": 1 }, \"samplers\": [ { \"node_id\": \"70\", \"class_type\": \"KSampler\", \"sampler_id\": null, \"steps\": 8, \"cfg\": 1, \"sampler_name\": \"res_multistep\", \"scheduler\": \"simple\", \"denoise\": 1, \"remote_profile\": null, \"model\": null, \"clip\": { \"node_id\": \"62\", \"class_type\": \"CLIPLoader\", \"clip_name\": \"qwen_3_4b.safetensors\", \"type\": \"lumina2\", \"device\": \"default\" }, \"loras\": [], \"issues\": [ { \"type\": \"UnsupportedModelChainNode\", \"message\": \"Unsupported model chain node 69: ModelSamplingAuraFlow\", \"fatal\": true, \"node_id\": \"69\", \"class_type\": \"ModelSamplingAuraFlow\" } ] } ], \"resources\": [ { \"kind\": \"clip\", \"name\": \"qwen_3_4b.safetensors\", \"source_node\": \"62\", \"exists\": true, \"local_path\": \"F:\\\\TieguoDun\\\\ComfyUI_NEW\\\\ComfyUI_windows_portable\\\\ComfyUI\\\\models\\\\clip\\\\qwen_3_4b.safetensors\", \"local_candidates\": [ \"F:\\\\TieguoDun\\\\ComfyUI_NEW\\\\ComfyUI_windows_portable\\\\ComfyUI\\\\models\\\\clip\\\\qwen_3_4b.safetensors\" ], \"relative_path\": \"qwen_3_4b.safetensors\" }, { \"kind\": \"vae\", \"name\": \"NewBie\\\\vae_for_newbie.safetensors\", \"source_node\": \"63\", \"exists\": true, \"local_path\": \"F:\\\\TieguoDun\\\\ComfyUI_NEW\\\\ComfyUI_windows_portable\\\\ComfyUI\\\\models\\\\vae\\\\NewBie\\\\vae_for_newbie.safetensors\", \"local_candidates\": [ \"F:\\\\TieguoDun\\\\ComfyUI_NEW\\\\ComfyUI_windows_portable\\\\ComfyUI\\\\models\\\\vae\\\\NewBie\\\\vae_for_newbie.safetensors\" ], \"relative_path\": \"NewBie/vae_for_newbie.safetensors\" } ], \"missing_resources\": [], \"custom_node_classes\": [ \"ModelSamplingAuraFlow\" ], \"remote_forbidden_classes\": [ \"SaveImage\", \"VAEDecode\", \"VAELoader\" ], \"issues\": [ { \"type\": \"UnsupportedModelChainNode\", \"message\": \"Unsupported model chain node 69: ModelSamplingAuraFlow\", \"fatal\": true, \"node_id\": \"69\", \"class_type\": \"ModelSamplingAuraFlow\" } ], \"fatal\": true } }"
+  - generic [ref=e856] [box=589,0,192,30]:
+    - img [ref=e858] [box=592,7,16,16]
+    - generic [ref=e862] [box=610,1,150,28]:
+      - button "API-key" [ref=e863] [cursor=pointer] [box=610,1,30,28]:
+        - img [ref=e864] [box=616,7,16,16]
+      - button "FastAPI" [ref=e866] [cursor=pointer] [box=640,1,30,28]:
+        - img [ref=e867] [box=646,7,16,16]
+      - button "Streamlit" [ref=e870] [cursor=pointer] [box=670,1,30,28]:
+        - img [ref=e871] [box=676,7,16,16]
+      - button "Workflow" [ref=e873] [cursor=pointer] [box=700,1,30,28]:
+        - img [ref=e874] [box=706,7,16,16]
+      - button "About" [ref=e877] [cursor=pointer] [box=730,1,30,28]:
+        - img [ref=e878] [box=736,7,16,16]
+    - button "Close" [ref=e880] [cursor=pointer] [box=760,1,20,28]:
+      - img [ref=e881] [box=762,7,16,16]
+  - generic [ref=e889] [box=389,120,600,475]:
+    - generic [ref=e890] [cursor=pointer] [box=949,141,18,34]: ×
+    - heading "ComfyUI LLM Party" [level=2] [ref=e891] [box=410,161,558,29]
+    - generic [ref=e892] [box=410,210,558,348]:
+      - paragraph [ref=e893] [box=410,210,558,68]: 注意！本项目是基于AGPL协议开源的，请遵守AGPL协议，以避免不必要的法律问题！谢谢您的合作！如果您需要可以闭源商用的版本，请邮箱联系hst97@qq.com
+      - paragraph [ref=e894] [box=410,294,558,80]: Attention! This project is open source based on the AGPL agreement, please abide by the AGPL agreement to avoid unnecessary legal problems! Thank you for your cooperation! If you need a closed-source commercial version, please contact hst97@qq.com
+      - paragraph [ref=e895] [box=410,390,558,20]:
+        - text: "github:"
+        - link "heshengtao/comfyui_LLM_party" [ref=e896] [cursor=pointer] [box=466,390,242,20]:
+          - /url: https://github.com/heshengtao/comfyui_LLM_party
+      - paragraph [ref=e897] [box=410,426,558,24]:
+        - text: "bilibili:"
+        - link "@派酱llm-party" [ref=e898] [cursor=pointer] [box=461,429,116,20]:
+          - /url: https://space.bilibili.com/26978344?spm_id_from=333.1007.0.0
+      - paragraph [ref=e899] [box=410,466,558,20]:
+        - text: "youtube:"
+        - link "@comfyui-LLM-party" [ref=e900] [cursor=pointer] [box=479,466,162,20]:
+          - /url: https://www.youtube.com/@comfyui-LLM-party
+      - paragraph [ref=e901] [box=410,502,558,20]:
+        - text: "QQ:"
+        - link "931057213" [ref=e902] [cursor=pointer] [box=443,502,81,20]:
+          - /url: https://github.com/heshengtao/comfyui_LLM_party/blob/main/img/Q%E7%BE%A4.jpg
+      - paragraph [ref=e903] [box=410,538,558,20]:
+        - text: "feishu:"
+        - link "use document" [ref=e904] [cursor=pointer] [box=464,538,107,20]:
+          - /url: https://dcnsxxvm4zeq.feishu.cn/wiki/IyUowXNj9iH0vzk68cpcLnZXnYf?fromScene=spaceOverview

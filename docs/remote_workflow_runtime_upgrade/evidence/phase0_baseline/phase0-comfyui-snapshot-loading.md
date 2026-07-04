@@ -1,0 +1,10 @@
+- generic [active] [ref=e1] [box=0,0,1377,715]:
+  - status "Loading ComfyUI" [ref=e2] [box=0,0,1377,715]:
+    - img [ref=e3] [box=589,325,200,65]
+  - main [ref=e9] [box=0,0,1377,715]:
+    - generic [ref=e10] [box=0,0,1377,715]:
+      - generic "Progress Bar by rgthree. right-click for rgthree menu." [ref=e12] [box=0,0,1377,16]
+      - generic [ref=e15] [box=0,16,1377,699]: .. .. ..
+    - text: 
+  - text: ×
+  - generic [ref=e23] [cursor=pointer] [box=28,638,50,20]: WeiLin
