@@ -1,6 +1,6 @@
 # Phase 9 Final Smoke Report
 
-- Time: `2026-07-05 13:08 +08:00`
+- Time: `2026-07-05 13:13 +08:00`
 - Source: ordinary `KSampler` API prompt derived from `workflows/runs/remote_sampling_converter_source_20260630_1755_api.json`
 - Source prompt type: clean base workflow, no LoRA
 - Result: `pass`
@@ -8,16 +8,16 @@
 ## Run Summary
 
 ```text
-tag: phase9_final_clean_animal_rerun_20260705_130317
-workflow_run_id: workflow_runtime_20260705_130317_c9da533c
-run_dir: F:\TieguoDun\Remote_comfyui\runs\workflow_runtime_20260705_130317_c9da533c
-prompt_id: fb176de6-6085-44e1-835c-28ebbb11cd3f
+tag: phase9_final_workflow_hash_20260705_131101
+workflow_run_id: workflow_runtime_20260705_131101_9d744421
+run_dir: F:\TieguoDun\Remote_comfyui\runs\workflow_runtime_20260705_131101_9d744421
+prompt_id: 7bb98420-48f3-4757-bd83-0371cc514e2e
 history_status: success
 manifest_stage: complete
 workflow_status_stage: complete
 workflow_status_percent: 100.0
-job_id: remote_sampling_20260705_130350_0850f33b_phase9_final_clean_animal_rerun_20260705_130317_500
-total_elapsed_sec: 84.151
+job_id: remote_sampling_20260705_131131_cd395a56_phase9_final_workflow_hash_20260705_131101_500
+total_elapsed_sec: 80.422
 ```
 
 ## Conversion And Privacy Audit
@@ -37,9 +37,9 @@ The source prompt started with ordinary `KSampler`. The workflow-level runtime g
 ## Transfer And Sampling Metrics
 
 ```text
-sampling: {"elapsed_sec": 2.781, "eta_sec": 0.0, "percent": 100.0, "sec_per_step": 0.695, "step": 4, "steps": 4}
-upload: {"bytes": 286714, "bytes_done": 286714, "bytes_total": 286714, "elapsed_sec": 12.204, "mb": 0.273, "mbps": 0.022, "percent": 100.0}
-download: {"bytes": 394786, "bytes_done": 394786, "bytes_total": 394786, "elapsed_sec": 6.898, "mb": 0.376, "mbps": 0.055, "percent": 100.0}
+sampling: {"elapsed_sec": 2.761, "eta_sec": 0.0, "percent": 100.0, "sec_per_step": 0.69, "step": 4, "steps": 4}
+upload: {"bytes": 286714, "bytes_done": 286714, "bytes_total": 286714, "elapsed_sec": 8.192, "mb": 0.273, "mbps": 0.033, "percent": 100.0}
+download: {"bytes": 394786, "bytes_done": 394786, "bytes_total": 394786, "elapsed_sec": 9.1, "mb": 0.376, "mbps": 0.041, "percent": 100.0}
 ```
 
 ## Hash Coverage
@@ -48,6 +48,7 @@ The run manifest contains:
 
 ```text
 source_prompt_sha256: present
+source_workflow_sha256: present
 workflow_analysis_sha256: present
 resources_plan_sha256: present
 resources_diff_sha256: present
@@ -68,8 +69,8 @@ workflow_report_sha256: present
 The image is intentionally not committed.
 
 ```text
-F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\phase9_final_clean_animal_rerun_20260705_130317_00001_.png
-size: 348879 bytes
+F:\TieguoDun\ComfyUI_NEW\ComfyUI_windows_portable\ComfyUI\output\remote_sampling_node\phase9_final_workflow_hash_20260705_131101_00001_.png
+size: 358814 bytes
 visual check: red panda / small animal; no white-haired girl or old character LoRA feature visible
 ```
 
@@ -79,7 +80,7 @@ Command scope: read-only under `/home/user02/remote_ComfyUI`.
 
 ```text
 REMOTE_PWD=/home/user02/remote_ComfyUI
-find jobs -path "*phase9_final_clean_animal_rerun_20260705_130317*" image files -> no output
+find jobs -path "*phase9_final_workflow_hash_20260705_131101*" image files -> no output
 find ComfyUI/output image files modified in last 180 minutes -> no output
 ss -ltnp | grep ":8197 " -> no output
 ps ... "ComfyUI/main.py|remote_submit_prompt" -> no output

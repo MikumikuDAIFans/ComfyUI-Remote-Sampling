@@ -4,7 +4,7 @@
 
 - Plan ID: `remote-workflow-runtime-upgrade`
 - Version: `v2`
-- Last updated: `2026-07-05 13:18 +08:00`
+- Last updated: `2026-07-05 13:15 +08:00`
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_workflow_runtime_upgrade\01_remote_workflow_runtime_upgrade_task_book.md`
 - Related handoff file: none
 - Current branch: `main`
@@ -633,4 +633,4 @@
 - 2026-07-05 13:35 +08:00: Phase 8 真实验证矩阵完成汇总。新增 `evidence/phase8_real_validation/real_validation_report.md` 和 `phase_summary.md`，覆盖 clean animal、real LoRA、custom-node、missing-resource、incompatible-node、stale-bypass、remote privacy 七类场景。Phase 8 gate 结论为 `pass-with-boundary`；Phase 9 release readiness 可以开始。
 - 2026-07-05 13:45 +08:00: Phase 9 release readiness 启动。`py_compile`、`node --check`、`git diff --check` 通过；本地 8188 `/object_info` 和 `/remote_workflow/runtime/status` 加载正常；远端轻量检查显示 8197 无监听、无残留 ComfyUI/submit 进程、locks 清空、最近 180 分钟远端 `ComfyUI/output` 无图片输出。证据写入 `evidence/phase9_release/release_readiness_report.md`。剩余 gate：review、是否补 final smoke、commit/push/remote head。
 - 2026-07-05 13:55 +08:00: Phase 9 review 完成。新增 `evidence/phase9_release/review_report.md`，当前 diff 未发现 P0/P1；P2/P3 后续项包括通用 SSH backend、超大资源断点续传、cancel/retry UI 和更多 workflow fixture。release readiness 中 code review 状态更新为 `pass-with-boundary`。
-- 2026-07-05 13:10 +08:00: Phase 9 final guarded smoke 通过。重启本地 ComfyUI 后使用普通 `KSampler` clean animal 源 prompt 触发 workflow-level `/remote_workflow/runtime/run`，run `workflow_runtime_20260705_130317_c9da533c` / prompt `fb176de6-6085-44e1-835c-28ebbb11cd3f` 成功；profile LoRA count `[0]`，remote prompt forbidden image node count `0`，workflow status `complete`，输出为红熊猫且无白发女孩特征；远端 job/output 无 PNG/JPG/JPEG/WEBP，8197 无监听，locks 清空。证据见 `evidence/phase9_release/final_smoke_report.md`。
+- 2026-07-05 13:15 +08:00: Phase 9 final guarded smoke 通过。重启本地 ComfyUI 后使用普通 `KSampler` clean animal 源 prompt 触发 workflow-level `/remote_workflow/runtime/run`，run `workflow_runtime_20260705_131101_9d744421` / prompt `7bb98420-48f3-4757-bd83-0371cc514e2e` 成功；source prompt/workflow hash、analysis hash、resource plan hash、remote execution plan hash 均存在；profile LoRA count `[0]`，remote prompt forbidden image node count `0`，workflow status `complete`，输出为红熊猫且无白发女孩特征；远端 job/output 无 PNG/JPG/JPEG/WEBP，8197 无监听，locks 清空。证据见 `evidence/phase9_release/final_smoke_report.md`。

@@ -68,10 +68,11 @@ find ComfyUI/output image files modified in last 180 minutes -> no output
 ## Final Guarded Smoke
 
 ```text
-workflow_run_id: workflow_runtime_20260705_130317_c9da533c
-prompt_id: fb176de6-6085-44e1-835c-28ebbb11cd3f
-job_id: remote_sampling_20260705_130350_0850f33b_phase9_final_clean_animal_rerun_20260705_130317_500
+workflow_run_id: workflow_runtime_20260705_131101_9d744421
+prompt_id: 7bb98420-48f3-4757-bd83-0371cc514e2e
+job_id: remote_sampling_20260705_131131_cd395a56_phase9_final_workflow_hash_20260705_131101_500
 status: success
+source_workflow_sha256: present
 profile_lora_counts: [0]
 remote_prompt_forbidden_image_node_count: 0
 visual check: red panda / small animal; no white-haired girl
