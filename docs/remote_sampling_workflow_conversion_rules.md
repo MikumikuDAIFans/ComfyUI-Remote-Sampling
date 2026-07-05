@@ -42,7 +42,31 @@
 
 - `Plan Current Workflow`：生成 workflow-level plan bundle，不排队。
 - `Convert`：生成本次专属 converted prompt 和 remote execution plan，不排队。
-- `Run Guarded`：从当前画布即时生成 API prompt，先执行资源检查/同步、自定义节点检查/同步、依赖安装计划和远端 import smoke，再转换、审计、生成 run bundle，并提交 converted prompt。
+- `Run Guarded`：从当前画布即时生成 API prompt，先创建 workflow-level plan 并轮询 `/remote_workflow/runtime/run_status`，再执行资源检查/同步、自定义节点检查/同步、依赖安装计划和远端 import smoke，之后转换、审计、生成 run bundle，并提交 converted prompt。
+
+workflow-level bundle 必须包含：
+
+```text
+workflow_status.json
+workflow_events.jsonl
+workflow_runtime_report.txt
+manifest.json
+```
+
+`manifest.json` 应记录 workflow status、events 和 report 的路径与 hash，用于证明本次运行来自当前 source workflow，而不是旧 converted workflow 或旧 profile。
+
+`run_id` 复用必须严格绑定 source identity：
+
+- `source_prompt_sha256` 不一致时必须返回 `SourcePromptHashMismatch`。
+- `source_workflow_sha256` 不一致时必须返回 `SourceWorkflowHashMismatch`。
+- mismatch 必须在 `local_preflight` 失败，且不得创建 `resources_diff.json`、`converted_local_prompt.json` 或任何远端 sampling job。
+
+远端图片节点隐私规则：
+
+- 本地 workflow 可以保留 `VAEDecode`、`PreviewImage`、`SaveImage` 等本地输出节点。
+- workflow-level privacy gate 检查的是 generated remote profile 能重建出的远端采样 prompt，而不是本地 converted prompt。
+- 远端 profile/prompt 中不得出现 `LoadImage`、`VAEEncode`、`VAELoader`、`VAEDecode`、`PreviewImage`、`SaveImage`。
+- 如果 generated profile 会构造出上述节点，必须以 `RemotePromptForbiddenImageNodes` 在 conversion 阶段 fail-closed。
 
 旧 `Remote Sampling` 面板的 `Run Current Workflow` 仍保留为兼容入口，但正式工作流级能力以 `Remote Workflow Runtime` 为准。
 

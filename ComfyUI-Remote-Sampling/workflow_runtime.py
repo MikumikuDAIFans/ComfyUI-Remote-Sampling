@@ -77,6 +77,14 @@ except ImportError:
 
 WORKFLOW_RUNTIME_VERSION = "workflow-runtime-v1"
 WORKFLOW_RUNTIME_POLICY_VERSION = "workflow-fail-closed-v1"
+FORBIDDEN_REMOTE_IMAGE_NODES = {
+    "LoadImage",
+    "VAEEncode",
+    "VAELoader",
+    "VAEDecode",
+    "PreviewImage",
+    "SaveImage",
+}
 STATE_MACHINE = [
     "idle",
     "local_preflight",
@@ -92,8 +100,178 @@ STATE_MACHINE = [
     "complete",
     "failed",
 ]
+
+
 def make_workflow_run_id() -> str:
     return f"workflow_runtime_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+
+def _now_text() -> str:
+    return time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _workflow_paths(run_dir: Path) -> dict[str, Path]:
+    return {
+        "status": run_dir / "workflow_status.json",
+        "events": run_dir / "workflow_events.jsonl",
+        "report": run_dir / "workflow_runtime_report.txt",
+        "manifest": run_dir / "manifest.json",
+    }
+
+
+def _append_workflow_event(
+    run_dir: Path,
+    stage: str,
+    event: str,
+    message: str,
+    *,
+    overall_percent: float | int | None = None,
+    details: Any = None,
+) -> dict[str, Any]:
+    import json
+
+    record = {
+        "ts": _now_text(),
+        "stage": stage,
+        "event": event,
+        "message": message,
+    }
+    if overall_percent is not None:
+        record["overall_percent"] = float(overall_percent)
+    if details is not None:
+        record["details"] = details
+    events_path = _workflow_paths(run_dir)["events"]
+    events_path.parent.mkdir(parents=True, exist_ok=True)
+    with events_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    return record
+
+
+def _write_workflow_status(
+    run_dir: Path,
+    run_id: str,
+    stage: str,
+    message: str,
+    *,
+    overall_percent: float | int,
+    fatal: bool = False,
+    details: Any = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    status = {
+        "schema_version": "workflow-runtime-status-v1",
+        "run_id": run_id,
+        "stage": stage,
+        "message": message,
+        "overall_percent": float(overall_percent),
+        "fatal": bool(fatal),
+        "updated_at": _now_text(),
+        "state_machine": STATE_MACHINE,
+    }
+    if details is not None:
+        status["details"] = details
+    if extra:
+        status.update(extra)
+    write_json(_workflow_paths(run_dir)["status"], status)
+    _append_workflow_event(
+        run_dir,
+        stage,
+        "status",
+        message,
+        overall_percent=overall_percent,
+        details=details,
+    )
+    return status
+
+
+def _read_workflow_events(run_dir: Path, tail: int = 40) -> list[dict[str, Any]]:
+    import json
+
+    events_path = _workflow_paths(run_dir)["events"]
+    if not events_path.is_file():
+        return []
+    lines = events_path.read_text(encoding="utf-8").splitlines()
+    if tail > 0:
+        lines = lines[-tail:]
+    events: list[dict[str, Any]] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            item = {"ts": None, "stage": "unknown", "event": "decode_error", "message": line}
+        if isinstance(item, dict):
+            events.append(item)
+    return events
+
+
+def _write_workflow_report(run_dir: Path, manifest: dict[str, Any], status: dict[str, Any] | None = None) -> Path:
+    events = _read_workflow_events(run_dir, tail=200)
+    lines = [
+        "# Remote Workflow Runtime Report",
+        "",
+        f"run_id: {manifest.get('run_id')}",
+        f"stage: {manifest.get('stage')}",
+        f"ok: {manifest.get('ok')}",
+        f"updated_at: {_now_text()}",
+        "",
+        "## Status",
+        f"stage: {(status or {}).get('stage', manifest.get('stage'))}",
+        f"message: {(status or {}).get('message', '')}",
+        f"overall_percent: {(status or {}).get('overall_percent', '')}",
+        "",
+        "## Hash Chain",
+    ]
+    for key in (
+        "source_prompt_sha256",
+        "source_workflow_sha256",
+        "workflow_analysis_sha256",
+        "resources_plan_sha256",
+        "resources_diff_sha256",
+        "resources_sync_report_sha256",
+        "custom_nodes_plan_sha256",
+        "remote_environment_report_sha256",
+        "custom_nodes_sync_report_sha256",
+        "remote_custom_node_dependency_install_sha256",
+        "remote_custom_node_import_smoke_sha256",
+        "converted_local_prompt_sha256",
+        "remote_execution_plan_sha256",
+        "runtime_conversion_manifest_sha256",
+    ):
+        if manifest.get(key):
+            lines.append(f"{key}: {manifest.get(key)}")
+    if manifest.get("error"):
+        lines.extend(["", "## Error", str(manifest.get("error"))])
+    lines.extend(["", "## Recent Events"])
+    for event in events[-30:]:
+        lines.append(
+            f"- {event.get('ts')} [{event.get('stage')}/{event.get('event')}] "
+            f"{event.get('message')} ({event.get('overall_percent', '')}%)"
+        )
+    report_path = _workflow_paths(run_dir)["report"]
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return report_path
+
+
+def _update_manifest_observability(run_dir: Path, manifest: dict[str, Any], status: dict[str, Any] | None = None) -> dict[str, Any]:
+    paths = _workflow_paths(run_dir)
+    report_path = _write_workflow_report(run_dir, manifest, status)
+    events = _read_workflow_events(run_dir, tail=10000)
+    if status is None and paths["status"].is_file():
+        status = _read_json_file(paths["status"])
+    manifest.update(
+        {
+            "workflow_status": str(paths["status"]) if paths["status"].is_file() else None,
+            "workflow_status_sha256": json_sha256(status) if status else None,
+            "workflow_events": str(paths["events"]) if paths["events"].is_file() else None,
+            "workflow_events_sha256": json_sha256({"events": events}) if events else None,
+            "workflow_report": str(report_path),
+            "workflow_report_sha256": json_sha256({"text": report_path.read_text(encoding="utf-8")}),
+        }
+    )
+    write_json(paths["manifest"], manifest)
+    return manifest
 
 
 def workflow_runtime_status() -> dict[str, Any]:
@@ -111,6 +289,8 @@ def workflow_runtime_status() -> dict[str, Any]:
             "runtime_conversion_policy": POLICY_VERSION,
             "remote_rgb_image_nodes_forbidden": True,
             "formal_entry": "workflow_level_controller",
+            "workflow_status_events": True,
+            "workflow_run_status_route": True,
         },
     }
 
@@ -120,6 +300,13 @@ def create_workflow_runtime_plan(payload: dict[str, Any]) -> dict[str, Any]:
     run_id = make_workflow_run_id()
     run_dir = project_root / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
+    _write_workflow_status(
+        run_dir,
+        run_id,
+        "local_preflight",
+        "Workflow runtime plan started.",
+        overall_percent=4,
+    )
 
     prompt = payload.get("prompt") if isinstance(payload, dict) else None
     workflow = payload.get("workflow") if isinstance(payload, dict) else None
@@ -135,6 +322,16 @@ def create_workflow_runtime_plan(payload: dict[str, Any]) -> dict[str, Any]:
             },
         }
         write_json(run_dir / "manifest.json", error)
+        status = _write_workflow_status(
+            run_dir,
+            run_id,
+            "failed",
+            "payload.prompt must be a ComfyUI API prompt object.",
+            overall_percent=100,
+            fatal=True,
+            details=error["error"],
+        )
+        _update_manifest_observability(run_dir, error, status)
         return error
 
     source_prompt_path = run_dir / "source_prompt.json"
@@ -148,28 +345,47 @@ def create_workflow_runtime_plan(payload: dict[str, Any]) -> dict[str, Any]:
     write_json(source_prompt_path, prompt)
     if isinstance(workflow, dict):
         write_json(source_workflow_path, workflow)
+    _write_workflow_status(
+        run_dir,
+        run_id,
+        "analysis",
+        "Analyzing source workflow and extracting resource/custom-node dependencies.",
+        overall_percent=12,
+    )
     analysis = analyze_prompt(prompt)
     write_json(analysis_path, analysis)
+    _write_workflow_status(
+        run_dir,
+        run_id,
+        "resource_plan",
+        "Building resource and custom-node plans from workflow analysis.",
+        overall_percent=24,
+        details={
+            "sampler_count": len(analysis.get("samplers", [])),
+            "custom_node_class_count": len(analysis.get("custom_node_classes", [])),
+        },
+    )
     resources_plan = build_resources_plan(analysis, project_root=project_root)
     write_json(resources_plan_path, resources_plan)
     custom_nodes_plan = build_custom_nodes_plan(analysis)
     write_json(custom_nodes_plan_path, custom_nodes_plan)
-    status = {
-        "schema_version": "workflow-runtime-status-v0",
-        "run_id": run_id,
-        "stage": "analysis",
-        "message": "Workflow-level runtime plan generated. Remote resource diff and custom-node environment checks are separate guarded steps.",
-        "overall_percent": 30,
-        "state_machine": STATE_MACHINE,
-        "fatal": bool(analysis.get("fatal") or resources_plan.get("fatal") or custom_nodes_plan.get("fatal")),
-        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    write_json(status_path, status)
+    status = _write_workflow_status(
+        run_dir,
+        run_id,
+        "analysis",
+        "Workflow-level runtime plan generated. Remote resource diff and custom-node environment checks are separate guarded steps.",
+        overall_percent=30,
+        fatal=bool(analysis.get("fatal") or resources_plan.get("fatal") or custom_nodes_plan.get("fatal")),
+        details={
+            "resource_count": resources_plan["summary"]["total"],
+            "custom_node_package_count": custom_nodes_plan["summary"]["package_count"],
+        },
+    )
     manifest = {
         "ok": not status["fatal"],
         "run_id": run_id,
         "run_dir": str(run_dir),
-        "created_at": status["created_at"],
+        "created_at": status["updated_at"],
         "workflow_runtime_version": WORKFLOW_RUNTIME_VERSION,
         "policy_version": WORKFLOW_RUNTIME_POLICY_VERSION,
         "source_prompt": str(source_prompt_path),
@@ -202,7 +418,7 @@ def create_workflow_runtime_plan(payload: dict[str, Any]) -> dict[str, Any]:
             "Resource plan mirrors local ComfyUI/models relative paths. Remote existence/hash diff is checked by Phase 3 remote integration.",
         ],
     }
-    write_json(manifest_path, manifest)
+    _update_manifest_observability(run_dir, manifest, status)
     return {
         **manifest,
         "status": status,
@@ -231,6 +447,225 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise TypeError(f"expected JSON object: {path}")
     return data
+
+
+def _prompt_class_list(prompt: dict[str, Any]) -> list[str]:
+    return [node.get("class_type", "") for node in prompt.values() if isinstance(node, dict)]
+
+
+def _remote_prompt_privacy_summary(prompt: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(prompt, dict):
+        return {
+            "class_list": [],
+            "forbidden_image_nodes": [],
+            "forbidden_image_node_count": 0,
+            "remote_rgb_image_nodes_forbidden": True,
+        }
+    classes = _prompt_class_list(prompt)
+    forbidden = sorted(set(classes) & FORBIDDEN_REMOTE_IMAGE_NODES)
+    return {
+        "class_list": classes,
+        "forbidden_image_nodes": forbidden,
+        "forbidden_image_node_count": len(forbidden),
+        "remote_rgb_image_nodes_forbidden": True,
+    }
+
+
+def _remote_profile_privacy_summary(profile_snapshots: list[dict[str, Any]]) -> dict[str, Any]:
+    classes: list[str] = []
+    profiles: list[dict[str, Any]] = []
+    for snapshot in profile_snapshots:
+        path = Path(str(snapshot.get("snapshot_profile", "")))
+        profile = _read_json_file(path) if path.is_file() else {}
+        profile_classes: list[str] = []
+        unet = profile.get("unet") if isinstance(profile.get("unet"), dict) else {}
+        clip = profile.get("clip") if isinstance(profile.get("clip"), dict) else {}
+        if unet.get("class_type"):
+            profile_classes.append(str(unet["class_type"]))
+        if clip.get("class_type"):
+            profile_classes.append(str(clip["class_type"]))
+        for lora in profile.get("loras", []):
+            if isinstance(lora, dict):
+                profile_classes.append(str(lora.get("class_type", "LoraLoader")))
+        profile_classes.append("Remote_Sampling_remote")
+        forbidden = sorted(set(profile_classes) & FORBIDDEN_REMOTE_IMAGE_NODES)
+        classes.extend(profile_classes)
+        profiles.append(
+            {
+                "node": snapshot.get("node"),
+                "snapshot_profile": str(path) if path else None,
+                "class_list": profile_classes,
+                "forbidden_image_nodes": forbidden,
+                "forbidden_image_node_count": len(forbidden),
+            }
+        )
+    forbidden_all = sorted(set(classes) & FORBIDDEN_REMOTE_IMAGE_NODES)
+    return {
+        "class_list": classes,
+        "forbidden_image_nodes": forbidden_all,
+        "forbidden_image_node_count": len(forbidden_all),
+        "profiles": profiles,
+        "remote_rgb_image_nodes_forbidden": True,
+        "privacy_scope": "remote_profile_prompt_reconstruction",
+    }
+
+
+def _run_dir_for(project_root: Path, run_id: str) -> Path:
+    base = (project_root / "runs").resolve()
+    run_dir = (base / run_id).resolve()
+    if base != run_dir and base not in run_dir.parents:
+        raise ValueError("run_id resolved outside project runs directory")
+    return run_dir
+
+
+def read_workflow_runtime_run_status(project_root: str | Path | None, run_id: str, *, tail: int = 40) -> dict[str, Any]:
+    root = Path(project_root) if project_root else DEFAULT_PROJECT_ROOT
+    run_dir = _run_dir_for(root, run_id)
+    if not run_dir.is_dir():
+        return {
+            "ok": False,
+            "run_id": run_id,
+            "error": {"type": "RunNotFound", "message": f"workflow runtime run not found: {run_id}"},
+        }
+    paths = _workflow_paths(run_dir)
+    status = _read_json_file(paths["status"]) if paths["status"].is_file() else None
+    manifest = _read_json_file(paths["manifest"]) if paths["manifest"].is_file() else None
+    report = paths["report"].read_text(encoding="utf-8") if paths["report"].is_file() else None
+    return {
+        "ok": True,
+        "run_id": run_id,
+        "run_dir": str(run_dir),
+        "status": status,
+        "events": _read_workflow_events(run_dir, tail=tail),
+        "manifest": manifest,
+        "report": report,
+    }
+
+
+def record_workflow_runtime_client_event(payload: dict[str, Any]) -> dict[str, Any]:
+    project_root = project_root_from_payload(payload) if isinstance(payload, dict) else DEFAULT_PROJECT_ROOT
+    run_id = str(payload.get("run_id") or "")
+    if not run_id:
+        return {
+            "ok": False,
+            "error": {"type": "InvalidPayload", "message": "payload.run_id is required."},
+        }
+    run_dir = _run_dir_for(project_root, run_id)
+    if not run_dir.is_dir():
+        return {
+            "ok": False,
+            "run_id": run_id,
+            "error": {"type": "RunNotFound", "message": f"workflow runtime run not found: {run_id}"},
+        }
+    stage = str(payload.get("stage") or "sampling")
+    if stage not in STATE_MACHINE:
+        stage = "sampling"
+    message = str(payload.get("message") or "Workflow runtime client event.")
+    percent = payload.get("overall_percent", 80)
+    try:
+        percent_value = max(0.0, min(100.0, float(percent)))
+    except (TypeError, ValueError):
+        percent_value = 80.0
+    details = payload.get("details") if isinstance(payload.get("details"), dict) else {}
+    fatal = bool(payload.get("fatal", False))
+    status = _write_workflow_status(
+        run_dir,
+        run_id,
+        stage,
+        message,
+        overall_percent=percent_value,
+        fatal=fatal,
+        details=details,
+        extra={
+            "client_observed": True,
+            "prompt_id": payload.get("prompt_id"),
+            "job_id": details.get("job_id"),
+        },
+    )
+    manifest = _copy_json_value(str(run_dir / "manifest.json")) or {
+        "ok": not fatal,
+        "run_id": run_id,
+        "run_dir": str(run_dir),
+    }
+    manifest.update(
+        {
+            "stage": stage,
+            "ok": bool(manifest.get("ok", True)) and not fatal,
+            "client_observed_prompt_id": payload.get("prompt_id"),
+            "client_observed_stage": stage,
+            "client_observed_details": details,
+        }
+    )
+    manifest = _update_manifest_observability(run_dir, manifest, status)
+    return {
+        "ok": True,
+        "run_id": run_id,
+        "run_dir": str(run_dir),
+        "status": status,
+        "manifest": manifest,
+        "events": _read_workflow_events(run_dir, tail=40),
+    }
+
+
+def _load_plan_for_run(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    project_root = project_root_from_payload(payload)
+    run_id = str(payload.get("run_id") or "")
+    if not run_id:
+        plan = create_workflow_runtime_plan(payload)
+        return plan, payload
+
+    run_dir = _run_dir_for(project_root, run_id)
+    manifest = _read_json_file(run_dir / "manifest.json")
+    source_prompt_path = Path(str(manifest.get("source_prompt", run_dir / "source_prompt.json")))
+    source_workflow_path = Path(str(manifest.get("source_workflow", run_dir / "source_workflow.json")))
+    next_payload = dict(payload)
+    prompt = next_payload.get("prompt")
+    if isinstance(prompt, dict):
+        prompt_hash = json_sha256(prompt)
+        expected_hash = manifest.get("source_prompt_sha256")
+        if expected_hash and prompt_hash != expected_hash:
+            failure = _fail_with_plan(
+                manifest,
+                "local_preflight",
+                "SourcePromptHashMismatch",
+                "Existing workflow runtime plan does not match the supplied prompt. Re-run Plan Current Workflow or omit run_id.",
+                details={
+                    "run_id": run_id,
+                    "expected_source_prompt_sha256": expected_hash,
+                    "actual_source_prompt_sha256": prompt_hash,
+                },
+            )
+            return failure, next_payload
+    else:
+        next_payload["prompt"] = _read_json_file(source_prompt_path)
+
+    workflow = next_payload.get("workflow")
+    if isinstance(workflow, dict):
+        workflow_hash = json_sha256(workflow)
+        expected_workflow_hash = manifest.get("source_workflow_sha256")
+        if expected_workflow_hash and workflow_hash != expected_workflow_hash:
+            failure = _fail_with_plan(
+                manifest,
+                "local_preflight",
+                "SourceWorkflowHashMismatch",
+                "Existing workflow runtime plan does not match the supplied frontend workflow. Re-run Plan Current Workflow or omit run_id.",
+                details={
+                    "run_id": run_id,
+                    "expected_source_workflow_sha256": expected_workflow_hash,
+                    "actual_source_workflow_sha256": workflow_hash,
+                },
+            )
+            return failure, next_payload
+    elif source_workflow_path.is_file():
+        next_payload["workflow"] = _read_json_file(source_workflow_path)
+    _write_workflow_status(
+        run_dir,
+        run_id,
+        "local_preflight",
+        "Loaded existing workflow runtime plan for guarded preparation.",
+        overall_percent=32,
+    )
+    return manifest, next_payload
 
 
 def _run_project_tool(project_root: Path, args: list[str], *, timeout: int = 7200, allow_failure: bool = False) -> str:
@@ -263,23 +698,28 @@ def _fail_with_plan(plan: dict[str, Any], stage: str, error_type: str, message: 
         "errors": list(plan.get("errors", [])) + [error],
     }
     write_json(run_dir / "manifest.json", failure)
-    write_json(
-        run_dir / "workflow_status.json",
-        {
-            "schema_version": "workflow-runtime-status-v0",
-            "run_id": plan["run_id"],
-            "stage": stage,
-            "message": message,
-            "overall_percent": 100 if stage == "failed" else 50,
-            "fatal": True,
-            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        },
+    status = _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        stage,
+        message,
+        overall_percent=100 if stage == "failed" else 50,
+        fatal=True,
+        details=error,
     )
+    _update_manifest_observability(run_dir, failure, status)
     return failure
 
 
 def _convert_from_plan(plan: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     run_dir = Path(str(plan["run_dir"]))
+    _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "convert",
+        "Generating fresh converted prompt and remote execution plan from the current source workflow.",
+        overall_percent=74,
+    )
     runtime_options = dict(payload.get("options", {})) if isinstance(payload.get("options"), dict) else {}
     runtime_options.setdefault("sampler_prefix", f"workflow_{plan['run_id']}")
     runtime_payload = {
@@ -298,6 +738,16 @@ def _convert_from_plan(plan: dict[str, Any], payload: dict[str, Any]) -> dict[st
             "errors": plan.get("errors", []) + [converted.get("error", {})],
         }
         write_json(run_dir / "manifest.json", failure)
+        status = _write_workflow_status(
+            run_dir,
+            str(plan["run_id"]),
+            "convert",
+            "Workflow-level runtime conversion failed.",
+            overall_percent=100,
+            fatal=True,
+            details=converted.get("error", {}),
+        )
+        _update_manifest_observability(run_dir, failure, status)
         return failure
 
     converted_prompt = converted.get("converted_prompt_object")
@@ -305,6 +755,17 @@ def _convert_from_plan(plan: dict[str, Any], payload: dict[str, Any]) -> dict[st
     remote_execution_plan_path = run_dir / "remote_execution_plan.json"
     conversion_manifest_path = Path(str(converted.get("run_dir", ""))) / "manifest.json"
     conversion_manifest = _copy_json_value(str(conversion_manifest_path))
+    profile_snapshots = converted.get("profile_snapshots", [])
+    profile_snapshots = profile_snapshots if isinstance(profile_snapshots, list) else []
+    privacy = _remote_profile_privacy_summary(profile_snapshots)
+    if privacy["forbidden_image_nodes"]:
+        return _fail_with_plan(
+            plan,
+            "convert",
+            "RemotePromptForbiddenImageNodes",
+            "Remote sampling profile would build a prompt containing image I/O or VAE image nodes.",
+            details=privacy,
+        )
     if isinstance(converted_prompt, dict):
         write_json(converted_prompt_path, converted_prompt)
 
@@ -325,12 +786,13 @@ def _convert_from_plan(plan: dict[str, Any], payload: dict[str, Any]) -> dict[st
         "remote_custom_node_import_smoke_sha256": plan.get("remote_custom_node_import_smoke_sha256"),
         "converted_prompt": str(converted_prompt_path) if isinstance(converted_prompt, dict) else converted.get("converted_prompt"),
         "converted_prompt_sha256": json_sha256(converted_prompt) if isinstance(converted_prompt, dict) else converted.get("converted_prompt_sha256"),
-        "profile_snapshots": converted.get("profile_snapshots", []),
+        "profile_snapshots": profile_snapshots,
         "converted_node_ids": converted.get("converted_node_ids", []),
         "removed_unreachable": converted.get("removed_unreachable", []),
         "rewired_clip_refs": converted.get("rewired_clip_refs", []),
         "audit": converted.get("audit"),
         "audit_text": converted.get("audit_text"),
+        "remote_prompt_privacy": privacy,
         "remote_rgb_image_nodes_forbidden": True,
         "stale_workflow_policy": "converted_from_current_source_prompt_in_this_run",
         "runtime_conversion_manifest": str(conversion_manifest_path) if conversion_manifest_path.is_file() else None,
@@ -348,6 +810,8 @@ def _convert_from_plan(plan: dict[str, Any], payload: dict[str, Any]) -> dict[st
             "converted_local_prompt_sha256": remote_execution_plan["converted_prompt_sha256"],
             "remote_execution_plan": str(remote_execution_plan_path),
             "remote_execution_plan_sha256": json_sha256(remote_execution_plan),
+            "remote_prompt_privacy": privacy,
+            "remote_prompt_forbidden_image_node_count": privacy["forbidden_image_node_count"],
             "runtime_conversion_run_id": converted.get("run_id"),
             "runtime_conversion_run_dir": converted.get("run_dir"),
             "runtime_conversion_manifest": str(conversion_manifest_path) if conversion_manifest_path.is_file() else None,
@@ -357,18 +821,21 @@ def _convert_from_plan(plan: dict[str, Any], payload: dict[str, Any]) -> dict[st
             ],
         }
     )
-    write_json(run_dir / "manifest.json", manifest)
+    status = _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "convert",
+        "Workflow-level conversion generated without queue submission.",
+        overall_percent=82,
+        details={
+            "converted_node_ids": remote_execution_plan.get("converted_node_ids", []),
+            "profile_snapshot_count": len(remote_execution_plan.get("profile_snapshots", [])),
+        },
+    )
+    _update_manifest_observability(run_dir, manifest, status)
     return {
         **manifest,
-        "status": {
-            "schema_version": "workflow-runtime-status-v0",
-            "run_id": plan["run_id"],
-            "stage": "convert",
-            "message": "Workflow-level conversion generated without queue submission.",
-            "overall_percent": 55,
-            "fatal": False,
-            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        },
+        "status": status,
         "analysis": plan.get("analysis"),
         "resources_plan": plan.get("resources_plan"),
         "custom_nodes_plan": plan.get("custom_nodes_plan"),
@@ -391,6 +858,13 @@ def _check_and_sync_resources(plan: dict[str, Any], payload: dict[str, Any]) -> 
     resources_plan_path = run_dir / "resources_plan.json"
     resources_diff_path = run_dir / "resources_diff.json"
     sync_report_path = run_dir / "resources_sync_report.json"
+    _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "resource_plan",
+        "Checking remote model and LoRA resources before latent upload.",
+        overall_percent=36,
+    )
     check_stdout = _run_project_tool(
         project_root,
         [
@@ -411,6 +885,14 @@ def _check_and_sync_resources(plan: dict[str, Any], payload: dict[str, Any]) -> 
             details={"stdout_tail": check_stdout[-4000:]},
         )
     diff = _read_json_file(resources_diff_path)
+    _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "resource_plan",
+        "Remote resource diff completed.",
+        overall_percent=42,
+        details=diff.get("summary", {}),
+    )
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     auto_sync = options.get("auto_sync_resources", True)
     if diff.get("fatal"):
@@ -418,6 +900,14 @@ def _check_and_sync_resources(plan: dict[str, Any], payload: dict[str, Any]) -> 
     if int(diff.get("summary", {}).get("upload_required", 0)) > 0:
         if not auto_sync:
             return _fail_with_plan(plan, "sync", "ResourceSyncRequired", "Remote resources are missing and auto_sync_resources is disabled.", details=diff)
+        _write_workflow_status(
+            run_dir,
+            str(plan["run_id"]),
+            "sync",
+            "Uploading missing remote resources.",
+            overall_percent=45,
+            details=diff.get("summary", {}),
+        )
         recheck_stdout = _run_project_tool(
             project_root,
             [
@@ -430,6 +920,14 @@ def _check_and_sync_resources(plan: dict[str, Any], payload: dict[str, Any]) -> 
             timeout=7200,
         )
         sync_report = _read_json_file(sync_report_path)
+        _write_workflow_status(
+            run_dir,
+            str(plan["run_id"]),
+            "sync",
+            "Resource upload finished. Rechecking remote resource diff.",
+            overall_percent=50,
+            details=sync_report.get("summary", {}),
+        )
         _run_project_tool(
             project_root,
             [
@@ -463,7 +961,15 @@ def _check_and_sync_resources(plan: dict[str, Any], payload: dict[str, Any]) -> 
             "resources_ready": True,
         }
     )
-    write_json(run_dir / "manifest.json", manifest)
+    status = _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "sync",
+        "Remote resources are ready.",
+        overall_percent=52,
+        details=diff.get("summary", {}),
+    )
+    _update_manifest_observability(run_dir, manifest, status)
     return manifest
 
 
@@ -475,6 +981,13 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
     sync_report_path = run_dir / "custom_nodes_sync_report.json"
     dependency_report_path = run_dir / "remote_custom_node_dependency_install.json"
     import_smoke_path = run_dir / "remote_custom_node_import_smoke.json"
+    _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "remote_env",
+        "Checking remote custom-node packages.",
+        overall_percent=54,
+    )
     check_stdout = _run_project_tool(
         project_root,
         [
@@ -495,6 +1008,14 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
             details={"stdout_tail": check_stdout[-4000:]},
         )
     report = _read_json_file(env_report_path)
+    _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "remote_env",
+        "Remote custom-node environment diff completed.",
+        overall_percent=56,
+        details=report.get("summary", {}),
+    )
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     auto_sync = options.get("auto_sync_custom_nodes", True)
     if report.get("fatal"):
@@ -502,6 +1023,14 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
     if int(report.get("summary", {}).get("sync_required", 0)) > 0:
         if not auto_sync:
             return _fail_with_plan(plan, "remote_env", "CustomNodeSyncRequired", "Remote custom nodes are missing and auto_sync_custom_nodes is disabled.", details=report)
+        _write_workflow_status(
+            run_dir,
+            str(plan["run_id"]),
+            "remote_env",
+            "Syncing missing remote custom-node packages.",
+            overall_percent=58,
+            details=report.get("summary", {}),
+        )
         recheck_stdout = _run_project_tool(
             project_root,
             [
@@ -513,6 +1042,14 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
             timeout=7200,
         )
         sync_report = _read_json_file(sync_report_path)
+        _write_workflow_status(
+            run_dir,
+            str(plan["run_id"]),
+            "remote_env",
+            "Custom-node package sync finished. Rechecking remote environment.",
+            overall_percent=60,
+            details=sync_report.get("summary", {}),
+        )
         _run_project_tool(
             project_root,
             [
@@ -536,6 +1073,13 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
     if report.get("fatal") or int(report.get("summary", {}).get("sync_required", 0)) > 0:
             return _fail_with_plan(plan, "remote_env", "CustomNodeSyncFailed", "Custom nodes are still not ready after sync.", details={"report": report, "sync_report": sync_report})
 
+    _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "remote_env",
+        "Preparing remote custom-node dependency plan.",
+        overall_percent=62,
+    )
     dependency_args = [
         str(project_root / "tools" / "install_remote_custom_node_dependencies.py"),
         str(custom_nodes_plan_path),
@@ -568,6 +1112,14 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
             details=dependency_report,
         )
 
+    _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "remote_env",
+        "Running remote ComfyUI custom-node import smoke.",
+        overall_percent=66,
+        details=dependency_report.get("summary", {}),
+    )
     smoke_stdout = _run_project_tool(
         project_root,
         [
@@ -611,12 +1163,24 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
             "remote_environment_ready": True,
         }
     )
-    write_json(run_dir / "manifest.json", manifest)
+    status = _write_workflow_status(
+        run_dir,
+        str(plan["run_id"]),
+        "remote_env",
+        "Remote custom-node environment is ready.",
+        overall_percent=70,
+        details={
+            "environment": report.get("summary", {}),
+            "dependency": dependency_report.get("summary", {}),
+            "import_smoke": import_smoke.get("summary", {}),
+        },
+    )
+    _update_manifest_observability(run_dir, manifest, status)
     return manifest
 
 
 def create_workflow_runtime_guarded_run(payload: dict[str, Any]) -> dict[str, Any]:
-    plan = create_workflow_runtime_plan(payload)
+    plan, payload = _load_plan_for_run(payload)
     if not plan.get("ok"):
         return plan
     with_resources = _check_and_sync_resources(plan, payload)
@@ -629,21 +1193,20 @@ def create_workflow_runtime_guarded_run(payload: dict[str, Any]) -> dict[str, An
     if not converted.get("ok"):
         return converted
     run_dir = Path(str(converted["run_dir"]))
-    status = {
-        "schema_version": "workflow-runtime-status-v0",
-        "run_id": converted["run_id"],
-        "stage": "queue",
-        "message": "Guarded workflow runtime is ready to queue. Frontend will submit converted_prompt_object to ComfyUI.",
-        "overall_percent": 65,
-        "fatal": False,
-        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "guards": {
+    status = _write_workflow_status(
+        run_dir,
+        str(converted["run_id"]),
+        "queue",
+        "Guarded workflow runtime is ready to queue. Frontend will submit converted_prompt_object to ComfyUI.",
+        overall_percent=72,
+        extra={
+            "guards": {
             "resources_ready": True,
             "remote_environment_ready": True,
             "converted_from_current_source": True,
+            },
         },
-    }
-    write_json(run_dir / "workflow_status.json", status)
+    )
     manifest = _copy_json_value(str(run_dir / "manifest.json")) or converted
     manifest.update(
         {
@@ -653,7 +1216,7 @@ def create_workflow_runtime_guarded_run(payload: dict[str, Any]) -> dict[str, An
             "queue_policy": "frontend_submits_converted_prompt_after_backend_guards",
         }
     )
-    write_json(run_dir / "manifest.json", manifest)
+    _update_manifest_observability(run_dir, manifest, status)
     return {
         **converted,
         **manifest,

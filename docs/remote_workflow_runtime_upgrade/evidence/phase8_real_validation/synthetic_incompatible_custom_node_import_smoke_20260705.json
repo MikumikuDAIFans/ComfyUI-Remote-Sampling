@@ -1,0 +1,24 @@
+{
+  "schema_version": "remote-custom-node-import-smoke-v1",
+  "checked_at": "2026-07-05 12:39:13",
+  "started_remote_service": true,
+  "classes": [
+    "CodexDefinitelyMissingNodeClassForImportSmoke"
+  ],
+  "object_info": {
+    "object_info_count": 819,
+    "classes": [
+      "CodexDefinitelyMissingNodeClassForImportSmoke"
+    ],
+    "missing_classes": [
+      "CodexDefinitelyMissingNodeClassForImportSmoke"
+    ],
+    "ok": false
+  },
+  "summary": {
+    "class_count": 1,
+    "missing_class_count": 1,
+    "object_info_count": 819
+  },
+  "fatal": true
+}

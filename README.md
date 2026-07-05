@@ -14,9 +14,13 @@ The recommended user-facing entry is the local ComfyUI floating panel:
 
 - `Plan Current Workflow`: analyze the current graph, list model/LoRA/custom-node dependencies, and create an audit bundle without queueing.
 - `Convert`: generate a fresh per-run converted prompt and remote execution plan without queueing.
-- `Run Guarded`: run backend guards for remote resources, custom nodes, dependency install planning, remote import smoke, runtime conversion, then queue the converted prompt.
+- `Run Guarded`: create a fresh workflow runtime plan, poll `workflow_status.json` / `workflow_events.jsonl` while backend guards run, check/sync remote resources and custom nodes, run dependency planning and remote import smoke, perform runtime conversion, then queue the converted prompt.
 
 Do not use old converted workflow files as the formal entry point. The workflow-level path is designed to convert from the current source prompt for every run, preventing stale LoRA/profile contamination.
+
+If a frontend or script reuses an existing workflow `run_id`, the supplied source prompt/workflow hash must match the run bundle manifest. A mismatch fails in local preflight with `SourcePromptHashMismatch` or `SourceWorkflowHashMismatch`; the system will not proceed to remote resource checks, conversion, latent upload, or sampling.
+
+Local output nodes such as `VAEDecode` and `SaveImage` are allowed to remain in the local converted prompt. The privacy gate checks the generated remote sampling profile/prompt instead. If a remote profile would construct `LoadImage`, `VAEEncode`, `VAELoader`, `VAEDecode`, `PreviewImage`, or `SaveImage`, conversion fails with `RemotePromptForbiddenImageNodes`.
 
 ## Main Components
 
@@ -44,6 +48,14 @@ Each job can produce:
 - `remote_sampling_report.txt`
 - transfer metrics for upload/download speed
 - remote sampling progress with `step`, `steps`, `percent`, elapsed time and ETA
+
+Workflow-level runs also produce:
+
+- `workflow_status.json`
+- `workflow_events.jsonl`
+- `workflow_runtime_report.txt`
+
+The frontend reads `/remote_workflow/runtime/run_status?run_id=...` while `Run Guarded` is preparing a workflow, so users can see the current stage before the converted prompt is queued.
 
 The local node keeps its first output as `LATENT` for workflow compatibility.
 

@@ -1,0 +1,48 @@
+{
+  "schema_version": "custom-nodes-plan-v1",
+  "local_comfy_root": "F:\\TieguoDun\\ComfyUI_NEW\\ComfyUI_windows_portable\\ComfyUI",
+  "local_custom_nodes_root": "F:\\TieguoDun\\ComfyUI_NEW\\ComfyUI_windows_portable\\ComfyUI\\custom_nodes",
+  "remote_base": "/home/user02/remote_ComfyUI",
+  "remote_custom_nodes_root": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes",
+  "classes": [
+    {
+      "class_name": "CodexDefinitelyMissingNodeClassForImportSmoke",
+      "local_package": {
+        "package_name": "ComfyUI-Remote-Sampling",
+        "local_path": "F:\\TieguoDun\\Remote_comfyui\\ComfyUI-Remote-Sampling",
+        "matched_files": [
+          "__init__.py"
+        ],
+        "git_remote": null,
+        "dependency_files": []
+      },
+      "remote_package": {
+        "path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling",
+        "package_name": "ComfyUI-Remote-Sampling"
+      },
+      "sync": {
+        "action": "check_remote_then_sync_if_missing"
+      }
+    }
+  ],
+  "packages": [
+    {
+      "package_name": "ComfyUI-Remote-Sampling",
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\ComfyUI-Remote-Sampling",
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling",
+      "git_remote": null,
+      "dependency_files": [],
+      "classes": [
+        "CodexDefinitelyMissingNodeClassForImportSmoke"
+      ]
+    }
+  ],
+  "summary": {
+    "custom_class_count": 1,
+    "package_count": 1,
+    "local_package_missing": 0,
+    "needs_remote_check": 1
+  },
+  "errors": [],
+  "fatal": false
+}

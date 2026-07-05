@@ -11,6 +11,8 @@ from .workflow_runtime import (
     create_workflow_runtime_conversion,
     create_workflow_runtime_guarded_run,
     create_workflow_runtime_plan,
+    read_workflow_runtime_run_status,
+    record_workflow_runtime_client_event,
     workflow_runtime_status,
 )
 
@@ -137,6 +139,29 @@ async def remote_workflow_runtime_status(request):
     return web.json_response(workflow_runtime_status(), headers={"Cache-Control": "no-store"})
 
 
+@PromptServer.instance.routes.get("/remote_workflow/runtime/run_status")
+async def remote_workflow_runtime_run_status(request):
+    run_id = request.query.get("run_id", "")
+    project_root = request.query.get("project_root")
+    tail_text = request.query.get("tail", "40")
+    try:
+        tail = max(0, min(500, int(tail_text)))
+    except ValueError:
+        tail = 40
+    if not run_id:
+        return web.json_response(
+            {
+                "ok": False,
+                "error": {"type": "InvalidPayload", "message": "run_id query parameter is required."},
+            },
+            status=400,
+            headers={"Cache-Control": "no-store"},
+        )
+    result = read_workflow_runtime_run_status(project_root, run_id, tail=tail)
+    status_code = 200 if result.get("ok") else 404
+    return web.json_response(result, status=status_code, headers={"Cache-Control": "no-store"})
+
+
 @PromptServer.instance.routes.post("/remote_workflow/runtime/plan")
 async def remote_workflow_runtime_plan(request):
     try:
@@ -154,6 +179,27 @@ async def remote_workflow_runtime_plan(request):
                     "type": error.__class__.__name__,
                     "message": str(error),
                 },
+            },
+            status=500,
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+@PromptServer.instance.routes.post("/remote_workflow/runtime/client_event")
+async def remote_workflow_runtime_client_event(request):
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict):
+            raise TypeError("JSON body must be an object")
+        result = record_workflow_runtime_client_event(payload)
+        status = 200 if result.get("ok") else 400
+        return web.json_response(result, status=status, headers={"Cache-Control": "no-store"})
+    except Exception as error:
+        return web.json_response(
+            {
+                "ok": False,
+                "stage": "failed",
+                "error": {"type": type(error).__name__, "message": str(error)},
             },
             status=500,
             headers={"Cache-Control": "no-store"},

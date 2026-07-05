@@ -37,7 +37,7 @@ Remote_Sampling_local
 
 - `Plan Current Workflow`：只分析当前画布，生成 `workflow_analysis.json`、`resources_plan.json`、`custom_nodes_plan.json`，不排队。
 - `Convert`：从当前画布重新生成本次专属 `converted_local_prompt.json` 和 `remote_execution_plan.json`，不排队。
-- `Run Guarded`：先执行远端资源检查/同步、自定义节点检查/同步、依赖安装计划、远端 `object_info` import smoke，再从当前画布重新转换；全部通过后把 converted prompt 提交到 ComfyUI 队列。
+- `Run Guarded`：先创建 workflow-level plan 并显示准备阶段进度；随后执行远端资源检查/同步、自定义节点检查/同步、依赖安装计划、远端 `object_info` import smoke，再从当前画布重新转换；全部通过后把 converted prompt 提交到 ComfyUI 队列。
 
 旧的 `Remote Sampling` 面板 `Run Current Workflow` 仍保留为兼容入口，但后续正式能力会优先落在 `Remote Workflow Runtime`。
 
@@ -61,8 +61,26 @@ resources_diff.json
 remote_environment_report.json
 remote_custom_node_dependency_install.json
 remote_custom_node_import_smoke.json
+workflow_status.json
+workflow_events.jsonl
+workflow_runtime_report.txt
 manifest.json
 ```
+
+`Run Guarded` 前端会轮询：
+
+```text
+/remote_workflow/runtime/run_status?run_id=<workflow_runtime_run_id>
+```
+
+因此资源检查、资源同步、自定义节点同步、依赖计划、import smoke、转换和 queue-ready 等阶段可以在面板中实时或准实时看到，而不需要等后端请求完全结束后再刷新。
+
+`run_id` 复用规则：
+
+- `Run Guarded` 会把本次 plan 绑定到当前 source prompt/workflow hash。
+- 如果脚本或前端复用旧 `run_id`，但又传入不同的当前 workflow/prompt，后端会在 `local_preflight` 以 `SourcePromptHashMismatch` 或 `SourceWorkflowHashMismatch` 失败。
+- 这类失败发生在远端资源检查、workflow conversion、latent 上传和远端采样之前。
+- 当前画布发生实质变化后，应重新执行 `Plan Current Workflow` 或直接重新 `Run Guarded`，不要复用旧 run bundle。
 
 随后底层 remote sampling node 仍会生成 job bundle：
 

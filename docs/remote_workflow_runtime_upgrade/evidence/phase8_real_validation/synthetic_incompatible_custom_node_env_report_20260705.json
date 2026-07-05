@@ -1,0 +1,29 @@
+{
+  "schema_version": "remote-environment-report-v1",
+  "checked_at": "2026-07-05 12:38:33",
+  "remote_base": "/home/user02/remote_ComfyUI",
+  "remote_custom_nodes_root": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes",
+  "packages": [
+    {
+      "package_name": "ComfyUI-Remote-Sampling",
+      "classes": [
+        "CodexDefinitelyMissingNodeClassForImportSmoke"
+      ],
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\ComfyUI-Remote-Sampling",
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling",
+      "git_remote": null,
+      "remote_exists": true,
+      "remote_init_exists": true,
+      "dependency_files": [],
+      "action": "ready_for_import_smoke",
+      "manual_sync_hint": "Compress \"F:\\TieguoDun\\Remote_comfyui\\ComfyUI-Remote-Sampling\" and extract it to \"/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling\"."
+    }
+  ],
+  "summary": {
+    "package_count": 1,
+    "ready_for_import_smoke": 1,
+    "sync_required": 0,
+    "remote_package_incomplete": 0
+  },
+  "fatal": false
+}

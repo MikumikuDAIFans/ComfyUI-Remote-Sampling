@@ -3,7 +3,7 @@ import { api } from "/scripts/api.js";
 
 const PANEL_ID = "remote-workflow-runtime-controller";
 
-window.__remoteWorkflowRuntimeControllerVersion = "20260705-guarded-run-v2";
+window.__remoteWorkflowRuntimeControllerVersion = "20260705-workflow-status-events-v1";
 
 function ensureStyle() {
   if (document.getElementById(`${PANEL_ID}-style`)) return;
@@ -90,6 +90,47 @@ function ensureStyle() {
       white-space: pre-wrap;
       word-break: break-word;
     }
+    #${PANEL_ID} .rwr-status-card {
+      background: #0b1220;
+      border: 1px solid #263244;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    #${PANEL_ID} .rwr-progress-track {
+      background: #1e293b;
+      border-radius: 999px;
+      height: 8px;
+      margin: 8px 0 6px;
+      overflow: hidden;
+    }
+    #${PANEL_ID} .rwr-progress-fill {
+      background: linear-gradient(90deg, #22d3ee, #38bdf8);
+      height: 100%;
+      transition: width 180ms ease;
+    }
+    #${PANEL_ID} .rwr-stage-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: #cbd5e1;
+    }
+    #${PANEL_ID} .rwr-stage {
+      color: #f8fafc;
+      font-weight: 700;
+    }
+    #${PANEL_ID} .rwr-events {
+      border-top: 1px solid #263244;
+      margin-top: 8px;
+      padding-top: 8px;
+    }
+    #${PANEL_ID} .rwr-event {
+      color: #94a3b8;
+      line-height: 1.3;
+      margin-top: 4px;
+    }
+    #${PANEL_ID} .rwr-event strong {
+      color: #dbe4ef;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -113,6 +154,18 @@ async function postJson(url, payload) {
     body: JSON.stringify(payload),
     cache: "no-store",
   });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) {
+    const message = data?.error?.message || data?.message || `request failed: ${response.status}`;
+    const error = new Error(message);
+    error.payload = data;
+    throw error;
+  }
+  return data;
+}
+
+async function getJson(url) {
+  const response = await fetch(url, { cache: "no-store" });
   const data = await response.json();
   if (!response.ok || data?.ok === false) {
     const message = data?.error?.message || data?.message || `request failed: ${response.status}`;
@@ -200,6 +253,243 @@ function summarizePlan(plan) {
   return lines.join("\n");
 }
 
+function renderRuntimeStatus(panel, statusPayload, footerHtml = "") {
+  const status = statusPayload?.status || {};
+  const manifest = statusPayload?.manifest || {};
+  const events = statusPayload?.events || [];
+  const percent = Math.max(0, Math.min(100, Number(status.overall_percent ?? 0)));
+  const recentEvents = events.slice(-5).reverse();
+  const eventHtml = recentEvents.length
+    ? recentEvents
+        .map((event) => {
+          const label = `${event.stage || "stage"}/${event.event || "event"}`;
+          return `<div class="rwr-event"><strong>${escapeHtml(label)}</strong> ${escapeHtml(event.message || "")}</div>`;
+        })
+        .join("")
+    : `<div class="rwr-event">Waiting for workflow runtime events...</div>`;
+  panel.querySelector(".rwr-body").innerHTML = `
+    <div class="rwr-status-card">
+      <div class="rwr-stage-line">
+        <span class="rwr-stage">${escapeHtml(status.stage || manifest.stage || "preparing")}</span>
+        <span>${percent.toFixed(0)}%</span>
+      </div>
+      <div class="rwr-progress-track"><div class="rwr-progress-fill" style="width: ${percent}%"></div></div>
+      <div>${escapeHtml(status.message || "Preparing workflow runtime...")}</div>
+      <div class="rwr-events">${eventHtml}</div>
+      ${footerHtml}
+    </div>
+  `;
+}
+
+function findRemoteSamplingReport(historyItem) {
+  const outputs = historyItem?.outputs || {};
+  for (const output of Object.values(outputs)) {
+    for (const text of output?.text || []) {
+      if (typeof text === "string" && text.includes("Remote Sampling Report")) return text;
+    }
+  }
+  return "";
+}
+
+function reportLineValue(report, label) {
+  const line = report.split("\n").find((item) => item.startsWith(`${label}:`));
+  return line ? line.slice(label.length + 1).trim() : "";
+}
+
+function reportJsonValue(report, label) {
+  const value = reportLineValue(report, label);
+  if (!value || !value.startsWith("{")) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function remoteSamplingReportDetails(report) {
+  if (!report) return {};
+  return {
+    job_id: reportLineValue(report, "job_id"),
+    total_elapsed_sec: Number(reportLineValue(report, "total_elapsed_sec")) || null,
+    upload: reportJsonValue(report, "upload"),
+    sampling: reportJsonValue(report, "sampling"),
+    download: reportJsonValue(report, "download"),
+  };
+}
+
+async function postWorkflowClientEvent(converted, stage, message, percent, promptId, details = {}, fatal = false) {
+  try {
+    return await postJson("/remote_workflow/runtime/client_event", {
+      run_id: converted.run_id,
+      project_root: converted.project_root,
+      stage,
+      message,
+      overall_percent: percent,
+      prompt_id: promptId,
+      details,
+      fatal,
+    });
+  } catch (error) {
+    console.warn("Remote workflow client_event failed", error);
+    return null;
+  }
+}
+
+function renderQueuedPromptStatus(panel, converted, promptId, state, historyItem = null) {
+  const report = findRemoteSamplingReport(historyItem);
+  let footer = `<pre>${escapeHtml(`workflow_run_id: ${converted.run_id}\nprompt_id: ${promptId}`)}</pre>`;
+  if (report) {
+    const sampling = reportLineValue(report, "sampling");
+    const upload = reportLineValue(report, "upload");
+    const download = reportLineValue(report, "download");
+    footer = `<pre>${escapeHtml(
+      [
+        `workflow_run_id: ${converted.run_id}`,
+        `prompt_id: ${promptId}`,
+        `job: ${reportLineValue(report, "job_id")}`,
+        `total: ${reportLineValue(report, "total_elapsed_sec")} sec`,
+        `upload: ${upload}`,
+        `sampling: ${sampling}`,
+        `download: ${download}`,
+      ].join("\n"),
+    )}</pre>`;
+  }
+  renderRuntimeStatus(
+    panel,
+    {
+      status: {
+        stage: state.stage,
+        message: state.message,
+        overall_percent: state.percent,
+        fatal: false,
+      },
+      manifest: converted,
+      events: [
+        {
+          stage: state.stage,
+          event: "prompt",
+          message: state.message,
+          overall_percent: state.percent,
+        },
+      ],
+    },
+    footer,
+  );
+}
+
+async function waitForQueuedPrompt(panel, converted, promptId) {
+  await postWorkflowClientEvent(
+    converted,
+    "queue",
+    "Converted prompt submitted to ComfyUI.",
+    76,
+    promptId,
+    { prompt_id: promptId },
+  );
+  renderQueuedPromptStatus(panel, converted, promptId, {
+    stage: "sampling",
+    message: "Converted prompt queued. Waiting for remote sampling job progress and completion...",
+    percent: 78,
+  });
+  let samplingEventWritten = false;
+  for (let attempt = 0; attempt < 1800; attempt += 1) {
+    const history = await getJson(`/history/${encodeURIComponent(promptId)}`);
+    const item = history?.[promptId];
+    if (item?.status?.completed) {
+      const report = findRemoteSamplingReport(item);
+      await postWorkflowClientEvent(
+        converted,
+        "complete",
+        "Guarded remote workflow run completed.",
+        100,
+        promptId,
+        {
+          prompt_id: promptId,
+          remote_sampling_report: remoteSamplingReportDetails(report),
+        },
+      );
+      renderQueuedPromptStatus(
+        panel,
+        converted,
+        promptId,
+        {
+          stage: "complete",
+          message: "Guarded remote workflow run completed.",
+          percent: 100,
+        },
+        item,
+      );
+      return item;
+    }
+    const messages = item?.status?.messages || [];
+    if (messages.some((message) => message?.[0] === "execution_error")) {
+      await postWorkflowClientEvent(
+        converted,
+        "failed",
+        "Converted prompt execution failed.",
+        100,
+        promptId,
+        { prompt_id: promptId, messages },
+        true,
+      );
+      renderQueuedPromptStatus(
+        panel,
+        converted,
+        promptId,
+        {
+          stage: "failed",
+          message: "Converted prompt execution failed.",
+          percent: 100,
+        },
+        item,
+      );
+      throw new Error("Converted prompt execution failed.");
+    }
+    if (attempt % 3 === 0) {
+      if (!samplingEventWritten) {
+        await postWorkflowClientEvent(
+          converted,
+          "sampling",
+          "Converted prompt is running in ComfyUI.",
+          84,
+          promptId,
+          { prompt_id: promptId },
+        );
+        samplingEventWritten = true;
+      }
+      renderQueuedPromptStatus(panel, converted, promptId, {
+        stage: "sampling",
+        message: "Converted prompt is running in ComfyUI. Node-level report will be summarized here when complete.",
+        percent: 84,
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("Timed out waiting for queued guarded workflow prompt.");
+}
+
+function startStatusPolling(panel, runId) {
+  let stopped = false;
+  const poll = async () => {
+    if (stopped) return;
+    try {
+      const status = await getJson(`/remote_workflow/runtime/run_status?run_id=${encodeURIComponent(runId)}&tail=20`);
+      renderRuntimeStatus(panel, status);
+    } catch (error) {
+      if (!stopped) {
+        const detail = error.payload ? JSON.stringify(error.payload, null, 2) : error.message;
+        setMessage(panel, `Runtime status poll failed:<pre>${escapeHtml(detail)}</pre>`, "rwr-error");
+      }
+    }
+  };
+  poll();
+  const timer = setInterval(poll, 1000);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
 async function queuePrompt(prompt) {
   return postJson("/prompt", {
     prompt,
@@ -247,25 +537,31 @@ async function convertCurrentWorkflow(panel) {
 async function runCurrentWorkflow(panel) {
   const button = panel.querySelector(".rwr-run");
   button.disabled = true;
+  let stopPolling = null;
   try {
     setMessage(panel, "Building API prompt from current graph...");
     const { prompt, workflow } = await graphPrompt();
-    setMessage(panel, "Preparing guarded workflow runtime: resources, custom nodes, conversion...");
-    const converted = await postJson("/remote_workflow/runtime/run", { prompt, workflow });
+    setMessage(panel, "Creating workflow runtime plan...");
+    const plan = await postJson("/remote_workflow/runtime/plan", { prompt, workflow });
+    stopPolling = startStatusPolling(panel, plan.run_id);
+    const converted = await postJson("/remote_workflow/runtime/run", { run_id: plan.run_id, prompt, workflow });
     if (!converted.converted_prompt_object) {
       throw new Error("Conversion did not return converted_prompt_object.");
     }
-    setMessage(panel, `Conversion passed. Queueing converted prompt...<pre>${escapeHtml(summarizePlan(converted))}</pre>`, "rwr-ok");
-    const queued = await queuePrompt(converted.converted_prompt_object);
-    setMessage(
+    if (stopPolling) stopPolling();
+    renderRuntimeStatus(
       panel,
-      `Queued guarded remote workflow run.<pre>${escapeHtml(summarizePlan(converted))}\n\nprompt_id: ${queued.prompt_id}</pre>`,
-      "rwr-ok",
+      { status: converted.status, manifest: converted, events: [] },
+      `<pre>${escapeHtml(summarizePlan(converted))}</pre>`,
     );
+    const queued = await queuePrompt(converted.converted_prompt_object);
+    await waitForQueuedPrompt(panel, converted, queued.prompt_id);
   } catch (error) {
+    if (stopPolling) stopPolling();
     const detail = error.payload ? JSON.stringify(error.payload, null, 2) : error.stack || error.message;
     setMessage(panel, `Guarded workflow run failed:<pre>${escapeHtml(detail)}</pre>`, "rwr-error");
   } finally {
+    if (stopPolling) stopPolling();
     button.disabled = false;
   }
 }

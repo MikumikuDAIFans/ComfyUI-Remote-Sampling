@@ -9,12 +9,29 @@ This directory is the canonical planning system for repositioning `ComfyUI-Remot
 - `01_remote_workflow_runtime_upgrade_task_book.md`: canonical long task book and progress ledger.
 - `02_testing_and_evidence_governance.md`: required tests, evidence paths, failure handling, and cleanup rules.
 - `03_goal_prompt.md`: executable `/goal` prompt for a future implementation session.
+- `00_preflight_governance/`: gate checklist, change control, failure templates and risk authorization rules.
+- `01_target_plans/`: target-level acceptance plans.
+- `02_long_task_books/00_phase_execution_matrix.md`: compact Phase 0-9 execution matrix.
+- `04_phase_start_checklists/`: phase start gates.
+- `05_minimal_feasibility_probe/`: high-risk feasibility probes.
+- `06_pre_start_readiness_review.md`: readiness review and remaining boundaries.
 
 ## Current Status
 
-- Execution readiness: `drafting`
-- Current active phase: `Phase 0: Baseline Freeze And Architecture Preflight`
-- Next action: review this plan with the user, then mark it `approved for execution` before implementation starts.
+- Execution readiness: `executing`
+- Current active phase: see `01_remote_workflow_runtime_upgrade_task_book.md`.
+- Next action: continue incomplete Phase 7/8 real validation, then Phase 9 release readiness.
+
+## Planning Mode
+
+This directory is now normalized as a Full Mode lifecycle/construction plan. It contains:
+
+- lifecycle routing and phase gates
+- target acceptance plans
+- phase execution and start-gate matrices
+- unit / contract / integration / gray / real / Zero-Short testing policy
+- evidence cleanup and failure-report rules
+- a copy-ready `/goal` prompt for continuing execution
 
 ## Design North Star
 

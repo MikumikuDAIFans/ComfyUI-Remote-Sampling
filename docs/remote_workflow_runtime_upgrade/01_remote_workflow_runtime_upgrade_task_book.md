@@ -3,17 +3,42 @@
 ## 计划元数据
 
 - Plan ID: `remote-workflow-runtime-upgrade`
-- Version: `v1`
-- Last updated: `2026-07-05 04:08 +08:00`
+- Version: `v2`
+- Last updated: `2026-07-05 13:55 +08:00`
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_workflow_runtime_upgrade\01_remote_workflow_runtime_upgrade_task_book.md`
 - Related handoff file: none
 - Current branch: `main`
-- Current active phase: `Phase 8: Productization, Docs And Release`
+- Current active phase: `Phase 0: Plan Approval And Baseline Re-Freeze`
 - Execution readiness: `executing`
+
+## Task Routing Decision
+
+- Task type: `new-feature + architecture-upgrade + release-readiness`
+- Scale mode: `Full`
+- Selected path: `00 route -> 01 requirements -> 02 current-state review -> 03 technical design -> 04 construction plan -> 09 feature delivery -> 06 evidence testing -> 10 review -> 11 release -> 12 maintenance`
+- Required branch skills: `project-lifecycle-workflow`, `construction-plan-system`, `long-task-planner` for ongoing progress updates.
+- Requires construction plan: `yes, now normalized under this plan directory`
+- Requires real test: `yes`
+- Requires release gate: `yes`
+- Risks:
+  - Workflow conversion equivalence is the highest product risk; stale converted workflows or stale remote profiles must never be accepted silently.
+  - Remote custom node Linux compatibility cannot be assumed from a working Windows local workflow.
+  - Model and LoRA synchronization may involve very large files and long transfer times; progress and resumability are product requirements, not polish.
+  - Privacy boundary must remain strict: remote sampling may receive latents and conditioning/model resources, but not RGB input/output images.
+- Next action: review this v2 task system, then approve it for execution or request edits.
+- Construction plan normalization: complete on `2026-07-05 13:20 +08:00`; new governance files are indexed in `plan-manifest.md`.
 
 ## 目标
 
-把当前 `ComfyUI-Remote-Sampling` 从“远程采样自定义节点”升级为“工作流级远程运行插件”。最终用户打开一个全新的本地 workflow 后，可以点击工作流级按钮启用远程采样；系统会先确认本地 workflow 可运行，再分析 workflow、同步远端资源、对齐模型/LoRA/自定义节点、转换工作流、生成每次运行的审计 bundle，最后只把采样阶段交给远端执行。本地仍负责输入图片、VAE encode/decode 和最终图片保存；远端不得读取或保存 RGB 图片。
+把当前 `ComfyUI-Remote-Sampling` 正式升级为“工作流级远程运行插件”，而不是仅依赖一个远程采样节点。最终用户打开一个全新的本地 ComfyUI workflow 后，可以从工作流级 UI 点击 `Enable Remote Workflow Runtime` / `Run With Remote Runtime`。系统必须先证明本地 workflow 是可信源，再分析 workflow、生成资源计划、同步模型/LoRA/自定义节点、验证远端 Linux 环境、执行每次运行的 fresh conversion、生成审计 bundle，最后只把采样阶段交给远端执行。本地仍负责 RGB 输入、VAE encode/decode、最终图片保存和 WebUI 编辑；远端不得读取或保存 RGB 输入/输出图片。
+
+最终体验必须满足：
+
+- 新 workflow 不需要用户手工准备远端 latent-only workflow。
+- 每次正式运行都从当前本地 workflow 生成远端执行计划；旧 converted workflow 不能绕过 guard。
+- 工作流中启用的 LoRA、模型和自定义节点必须被识别、同步、校验，并保持本地/远端相对路径对齐。
+- 不支持、缺失、不兼容或不可信的部分必须在 latent 上传前 fail-closed，并给出人类可执行的修复建议。
+- 漫长的同步、安装、转换、上传、采样、下载过程必须有清晰 UI 进度和可追溯文件证据。
 
 ## 范围与约束
 
@@ -26,12 +51,16 @@
   - custom node 同步与 Linux 兼容性验证：本地打包上传优先，失败后尝试 ComfyUI Manager/git fallback。
   - runtime conversion：每次运行从当前源 workflow/prompt 生成 converted prompt、remote execution plan、profile snapshot、audit 和 manifest。
   - workflow-level 进度 UI：本地检查、分析、资源同步、远端环境、自定义节点安装、转换、上传、采样、下载、本地解码。
+  - workflow-level status/events/report 文件和前端轮询显示。
+  - hash identity / cache policy：允许严格命中缓存，但任何 source/resource/environment mismatch 都必须重新转换或失败。
+  - review、release readiness、maintenance regression matrix。
   - 完整测试矩阵和证据治理。
 - Out of scope:
   - 第一版不承诺支持所有复杂 ComfyUI 节点；不支持时必须 fail-closed。
   - 不在远端执行 VAE decode、PreviewImage、SaveImage 或任何 RGB 图片输出。
   - 不自动从不可信 URL 下载模型。
   - 不承诺 latent 不可逆或 prompt 语义不泄露。
+  - 第一版不承诺全自动解决所有 custom node 的 Linux 编译依赖；可以生成明确的人工修复报告。
 - Constraints:
   - `Remote_Sampling_local` 第一个输出必须继续是 `LATENT`。
   - 远端写入范围限定在 `/home/user02/remote_ComfyUI`。
@@ -39,8 +68,256 @@
   - GitHub 操作必须通过 `git-proxy-push` 的 `127.0.0.1:11809` 代理规则。
   - 不提交 `runs/`、`jobs/`、`transfer/`、模型、图片、latent、日志和密钥。
   - 所有资源同步和转换失败必须给出人类可执行的修复提示。
+  - 若需要远端执行 `pip install` 或 Manager/git fallback，必须记录命令、来源、日志和失败原因；未知来源代码不得静默执行。
 
-## 执行阶段
+## 生命周期 Gate
+
+| Gate ID | 名称 | 通过证据 | 状态 |
+|---|---|---|---|
+| DEV-GATE-00 | 任务类型明确 | 本文 `Task Routing Decision` | pass |
+| DEV-GATE-01 | 需求可验收 | 本文目标、范围、最终体验、完成定义 | pass-with-boundary |
+| DEV-GATE-02 | 现状可信 | v1 执行日志、README、现有代码和证据目录 | pass-with-boundary |
+| DEV-GATE-03 | 技术方案可执行 | v2 阶段体系、模块边界、状态机、错误模型 | drafting |
+| DEV-GATE-04 | 计划可施工 | task book、testing governance、goal prompt、preflight governance、target plans、phase matrix、start checklists、MVP probes、readiness review | pass-with-boundary |
+| DEV-GATE-05 | 开发改动可控 | 每阶段 change batch、py_compile、diff check | pending |
+| DEV-GATE-06 | 测试证据充分 | Unit/Contract/Integration/Gray/Real/Zero-Short 证据 | pending |
+| DEV-GATE-10 | Review 无阻塞 | review report，P0/P1 关闭或授权延期 | pending |
+| DEV-GATE-11 | 可发布/可交付 | release readiness、commit、push、remote head | pending |
+| DEV-GATE-12 | 可维护 | regression matrix、known limitations、next issues | pending |
+
+## V2 施工阶段总览
+
+以下 v2 阶段是后续执行的 canonical plan。下方保留的 v1 执行日志和证据只能作为 baseline，不能替代 v2 Gate。
+
+| Phase | 名称 | 目标 | 必过测试 |
+|---|---|---|---|
+| 0 | Plan Approval And Baseline Re-Freeze | 冻结当前可用能力、重新确认 v2 目标与风险 | py_compile、status routes、clean smoke、远端无图 |
+| 1 | Workflow-Level Product Shell | 建立真正的 workflow-level UI/后端入口和状态机 | UI load、route contract、plan/run bundle |
+| 2 | Source Workflow Validity And Analysis | 证明本地 workflow 是可信源，提取模型/LoRA/custom node 依赖 | fixture、真实 LoRA、缺失资源 fail |
+| 3 | Resource Sync And Path Mirror | 模型/LoRA/VAE/CLIP 等资源按相对路径对齐远端 | path/hash、remote diff、large-file skip |
+| 4 | Custom Node Environment Manager | 打包/同步/安装/导入验证远端 custom nodes | package sync、dependency plan、import smoke |
+| 5 | Fresh Conversion And Identity Guard | 每次从当前 workflow 转换，拒绝陈旧 profile/workflow | source hash、profile hash、LoRA exact match |
+| 6 | Orchestration, Progress And Recovery | 让同步、安装、转换、采样全程可观察可恢复 | events/status、UI progress、resume/retry |
+| 7 | Privacy And Fail-Closed Hardening | 系统性防止远端图片输出和 latent 前错误漏过 | forbidden nodes、remote no-image、pre-upload fail |
+| 8 | Real Workflow Validation Matrix | 用真实 clean/LoRA/custom-node/异常 workflow 证明产品可靠 | clean animal、LoRA exact、custom node、missing/incompatible |
+| 9 | Productization, Release And Maintenance | 文档、review、提交推送、维护矩阵 | final smoke、review、commit/push、remote head |
+
+## V2 执行阶段详情
+
+### Phase 0: Plan Approval And Baseline Re-Freeze
+
+- Purpose: 在下一轮大规模升级前重新冻结当前 commit、远端环境、可运行路径、已知缺口和回滚点。
+- Outputs:
+  - `baseline_report.md`
+  - 当前 local/remote package version、Git commit、remote head、ComfyUI 8188/8197 状态。
+  - v1 已通过证据索引，标注哪些证据可继承、哪些必须重测。
+- Completion criteria:
+  - 当前 clean runtime smoke 可复测。
+  - 远端 job/output 目录无 runtime PNG/JPG/JPEG/WEBP。
+  - v2 计划由用户批准后，`Execution readiness` 更新为 `approved for execution` 或 `executing`。
+- Validation:
+  - Unit: `python -m py_compile` 覆盖当前 Python 文件。
+  - Contract: `/remote_sampling/status`、`/remote_workflow/runtime/status` 返回版本/capabilities。
+  - Integration: 4-step clean smoke 从本地 8188 到远端采样再本地 decode。
+  - Gray: 已知旧 converted workflow/fixed profile 不能绕过 guard。
+  - Real: clean animal 输出无白发女孩。
+  - Zero-Short: 重启本地 ComfyUI 后 workflow-level JS 自动加载。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase0_baseline/`
+
+### Phase 1: Workflow-Level Product Shell
+
+- Purpose: 将用户入口明确提升为 workflow-level plugin，而不是要求用户手工放置远程采样节点。
+- Outputs:
+  - `Enable Remote Workflow Runtime` / `Run With Remote Runtime` UI 入口。
+  - 后端 route：plan、prepare/run、status/events/report、cancel/retry 若可行。
+  - workflow-level 状态机：local_preflight、analysis、resource_plan、resource_sync、custom_node_sync、remote_env、convert、queue、sampling、download、decode、complete、failed。
+  - UI 显示 run id、阶段、当前任务、耗时、失败建议和证据路径。
+- Completion criteria:
+  - 从全新本地 workflow 当前画布触发 plan/run，不依赖旧 converted workflow 文件。
+  - UI 可以在后端长任务执行期间持续更新阶段状态，而不是等待 fetch 完成后一次性刷新。
+  - 节点内 `Remote_Sampling_local` 面板保持兼容，不破坏第一个 `LATENT` 输出。
+- Validation:
+  - Unit: 状态聚合和前端渲染函数。
+  - Contract: route schema 覆盖 success、warning、fatal、progress event、repair hint。
+  - Integration: 当前画布生成 run bundle 但不 queue。
+  - Gray: 旧节点路径仍可用于调试或明确标记为 legacy。
+  - Real: 浏览器截图证明 UI 入口和阶段进度。
+  - Zero-Short: 清空浏览器缓存/重启 ComfyUI 后 UI 正常加载。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase1_controller/`
+
+### Phase 2: Source Workflow Validity And Analysis
+
+- Purpose: 在任何远端动作前证明本地 workflow 是唯一可信源，并提取完整依赖事实。
+- Outputs:
+  - `source_workflow.json`、`source_prompt.json`、`workflow_analysis.json`。
+  - 本地缺失模型、缺失节点、断链、unsupported sampler、forbidden remote image node 的 fatal/warning 分级。
+  - 采样器、模型链、CLIP/VAE、LoRA、ControlNet/IPAdapter/其他扩展资源的识别策略。
+- Completion criteria:
+  - base-only workflow 分析结果 LoRA count 为 0。
+  - LoRA workflow 精确记录 LoRA 相对路径、strength_model、strength_clip、节点来源。
+  - 缺失本地资源或 unsupported conversion 不会进入 resource sync。
+- Validation:
+  - Unit: prompt/workflow fixtures。
+  - Contract: `workflow_analysis.json` schema。
+  - Integration: analysis 可直接驱动 resource/custom-node planner。
+  - Gray: 与旧 audit 工具结果交叉比对。
+  - Real: 用户真实 LoRA workflow 分析。
+  - Zero-Short: 新建最小 clean workflow 可生成干净 analysis。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase2_analyzer/`
+
+### Phase 3: Resource Sync And Path Mirror
+
+- Purpose: 让模型、LoRA、VAE、CLIP 等资源在本地/远端以相同相对目录对齐，并避免重复传输大文件。
+- Outputs:
+  - `resources_plan.json`、`resources_diff.json`、`resource_sync_report.json`。
+  - 路径映射规则：`local ComfyUI/models/<kind>/<relative>` -> `remote /home/user02/remote_ComfyUI/ComfyUI/models/<kind>/<relative>`。
+  - size/hash policy、skip/reupload/fail/manual actions。
+  - 人类可执行的上传命令建议。
+- Completion criteria:
+  - 每个资源都有 local path、relative path、remote path、size、hash、sync action。
+  - 远端缺失资源默认自动同步或在 latent 上传前失败。
+  - hash/size mismatch 默认 fail-closed，除非用户明确授权覆盖。
+  - LoRA Manager 管理的 LoRA 目录结构被保持。
+- Validation:
+  - Unit: path normalization、hash、diff planner。
+  - Contract: resources schema。
+  - Integration: company-lab 远端 diff 和 sync。
+  - Gray: 已存在、缺失、size mismatch、hash mismatch 四类 case。
+  - Real: 至少一个真实 LoRA 文件同步并记录速度/耗时。
+  - Zero-Short: 删除旧 profile/cache 后仍由当前 workflow 生成资源计划。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase3_resource_planner/`
+
+### Phase 4: Custom Node Environment Manager
+
+- Purpose: 自动或半自动让远端 Linux ComfyUI 具备当前 workflow 需要的 custom nodes，并证明可 import。
+- Outputs:
+  - `custom_nodes_plan.json`、`dependency_plan.json`、`remote_environment_report.json`、`import_smoke_report.json`。
+  - 本地 custom node 打包上传和远端解包机制。
+  - dependency install dry-run/execute 机制。
+  - ComfyUI Manager/git fallback 的报告化实现；未知来源或高风险安装必须要求明确授权。
+- Completion criteria:
+  - 远端缺失 custom node 先尝试本地打包同步。
+  - 依赖安装命令、来源、日志和失败原因进入 bundle。
+  - 远端 `object_info` import smoke 找不到目标 class 时 fail-closed。
+  - Windows-only 或 Linux 不兼容节点不会被静默跳过。
+- Validation:
+  - Unit: custom node discovery、package builder、requirements parser。
+  - Contract: custom/env report schema。
+  - Integration: 同步一个真实 custom node 到远端并启动 import smoke。
+  - Gray: 缺失包、缺失依赖、导入失败、启动失败。
+  - Real: 用户真实 custom-node workflow 成功或 fail-closed。
+  - Zero-Short: 清理远端目标包后可重新同步。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase4_remote_environment/`
+
+### Phase 5: Fresh Conversion And Identity Guard
+
+- Purpose: 确保每次运行的远端执行计划都来自当前本地 workflow，彻底消灭旧 workflow/旧 LoRA/profile 污染。
+- Outputs:
+  - `converted_local_prompt.json`、`remote_execution_plan.json`、`profiles/*.json`、`manifest.json`。
+  - source workflow/prompt hash、analysis hash、resource plan hash、environment report hash、profile hash、remote prompt hash。
+  - strict cache identity：只有 source/resource/environment/converter version 全部命中才允许 cache；否则重新转换。
+- Completion criteria:
+  - 正式 run 默认 fresh conversion。
+  - base-only workflow 的 remote profile LoRA count 为 0。
+  - LoRA workflow 的 remote profile LoRA list exactly match 当前本地 workflow。
+  - forbidden image nodes、unsupported sampler、自定义采样链不明时 fail-closed。
+- Validation:
+  - Unit: converter、manifest hash、cache key。
+  - Contract: manifest schema。
+  - Integration: analyzer -> resource -> env -> conversion 全链路。
+  - Gray: 人为放入旧 converted workflow/profile，系统拒绝或重建。
+  - Real: clean animal 与 LoRA workflow 各完成一次 conversion/run。
+  - Zero-Short: 删除所有旧 run bundle 后仍可从当前画布运行。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase5_conversion/`
+
+### Phase 6: Orchestration, Progress And Recovery
+
+- Purpose: 把漫长流程做成可观察、可恢复、可诊断的工作流级运行体验。
+- Outputs:
+  - workflow-level `workflow_status.json`、`workflow_events.jsonl`、`workflow_runtime_report.txt`。
+  - 前端实时进度：本地预检、分析、资源同步、custom node 同步、依赖安装、import smoke、转换、上传、采样、下载、解码。
+  - cancel/retry/resume 设计；已一致资源跳过重复上传。
+  - 失败报告包含 stage、error code、repair hints、是否已上传 latent。
+- Completion criteria:
+  - UI 不再只在详情参数或请求结束后更新；阶段状态应实时或准实时刷新。
+  - 资源同步速度、采样进度、下载速度、总耗时都有明确显示。
+  - 中断后重新运行不会盲目重复上传已一致资源。
+  - 所有失败都有可读 report 和下一步建议。
+- Validation:
+  - Unit: event writer/reader、progress aggregator、retry planner。
+  - Contract: status/events schema。
+  - Integration: 模拟多文件 sync 并验证 UI 进度。
+  - Gray: 中断/失败后重跑，验证 skip/resume。
+  - Real: 上传至少一个 LoRA 并截图 UI 速度/ETA。
+  - Zero-Short: 新用户打开 UI 可理解当前阶段和失败原因。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase6_progress_recovery/`
+
+### Phase 7: Privacy And Fail-Closed Hardening
+
+- Purpose: 将隐私边界和异常防御从“约定”变成可测试的系统约束。
+- Outputs:
+  - forbidden remote node list and tests。
+  - pre-upload failure tests for missing model/LoRA/custom node/environment。
+  - remote no-image scanner。
+  - privacy boundary report。
+- Completion criteria:
+  - 远端 workflow 不包含 VAE decode、PreviewImage、SaveImage 或 RGB image input/output 节点。
+  - 缺失资源、自定义节点不兼容、hash mismatch 在 latent 上传前失败。
+  - 每次真实 run 后检查远端 job 目录和远端 `ComfyUI/output`。
+  - 任何隐私边界削弱都必须阻塞并询问用户。
+- Validation:
+  - Unit: forbidden node detector。
+  - Contract: privacy report schema。
+  - Integration: guarded run pre-upload failure。
+  - Gray: 故意注入 forbidden node，确认 fail-closed。
+  - Real: 成功 run 后远端无图片。
+  - Zero-Short: 最小 workflow 也执行同样 privacy scan。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase7_privacy_fail_closed/`
+
+### Phase 8: Real Workflow Validation Matrix
+
+- Purpose: 用真实工作流证明系统达到用户预想，而不是只通过合成 fixture。
+- Outputs:
+  - `real_validation_report.md`
+  - clean animal、real LoRA、custom-node、missing-resource、incompatible-node、old-workflow-bypass 六类证据。
+  - 截图、prompt id、job id、run bundle id、hash chain、remote no-image output。
+- Completion criteria:
+  - clean animal workflow 输出不出现白发女孩，remote LoRA count 为 0。
+  - LoRA workflow remote LoRA list exactly match 当前本地 workflow。
+  - custom-node workflow 成功或在 latent 上传前 fail-closed。
+  - 旧 converted workflow/profile 不能污染新 workflow。
+  - 所有成功 job 有完整 audit bundle。
+- Validation:
+  - Unit: validation fixtures reload。
+  - Contract: validation report schema。
+  - Integration: local UI -> remote guarded run -> local decode/save。
+  - Gray: old converted workflow bypass attempt。
+  - Real: 至少三条真实 workflow，含截图证据。
+  - Zero-Short: 从全新 workflow 开始完成一次远程运行。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase8_real_validation/`
+
+### Phase 9: Productization, Release And Maintenance
+
+- Purpose: 把系统作为可公开维护的 workflow-level plugin 交付，而不是本机实验工程。
+- Outputs:
+  - README、usage、conversion rules、troubleshooting、limitations、release readiness。
+  - review report、test execution report、maintenance/regression matrix。
+  - commit、push、GitHub remote head verification。
+- Completion criteria:
+  - 文档明确项目定位为 workflow-level remote runtime plugin。
+  - 安装、配置、资源同步、自定义节点同步、失败修复路径清楚。
+  - P0/P1 review findings 关闭或用户授权延期。
+  - GitHub main 分支 head 与本地 commit 一致。
+- Validation:
+  - Unit: final `py_compile`。
+  - Contract: docs match route/schema。
+  - Integration: final guarded smoke。
+  - Gray: legacy/debug entry compatibility。
+  - Real: final clean animal + LoRA + custom-node matrix。
+  - Zero-Short: fresh install/readme command review。
+- Evidence: `docs/remote_workflow_runtime_upgrade/evidence/phase9_release/`
+
+## V1 基线阶段详情（保留证据，不作为 V2 完成状态）
 
 ### Phase 0: Baseline Freeze And Architecture Preflight
 
@@ -207,7 +484,7 @@
 - Evidence:
   - `evidence/phase6_progress_recovery/`
 
-### Phase 7: Real Workflow Validation Matrix
+### Legacy Phase 7: Real Workflow Validation Matrix
 
 - Purpose: 用真实用户场景证明系统达到预想：新 workflow 不被旧 LoRA 污染，LoRA 和自定义节点对齐后才远端执行，异常全部 fail-closed。
 - Outputs:
@@ -230,7 +507,7 @@
 - Evidence:
   - `evidence/phase7_real_validation/`
 
-### Phase 8: Productization, Docs And Release
+### Legacy Phase 8: Productization, Docs And Release
 
 - Purpose: 把新定位、新入口、新限制、新安装方式写成可发布项目，而不是只保留本机实验脚本。
 - Outputs:
@@ -309,19 +586,18 @@
   - Remote temporary port: `8197`
   - Current branch: `main`
 
-## 进度台账
-
-- Overall progress: Phase 0、Phase 1、Phase 2、Phase 3 已完成。Phase 4 已完成 custom node plan、远端环境检查、缺失包打包同步、依赖安装 dry-run/显式执行机制、远端 object_info import smoke。Phase 5 已完成 workflow-level convert route 和每次运行专属 conversion bundle。Phase 6 已完成 backend guarded `/remote_workflow/runtime/run`，包含资源 diff/sync、自定义节点 env/sync、依赖计划、import smoke、转换、queue-ready bundle。Phase 7 已完成缺失 LoRA fail-closed、真实 LoRA smoke、clean animal 20-step、clean formal 20-step 和远端无图片验证。当前进入 Phase 8：最终检查、提交推送。
-- Phase 0: done
-- Phase 1: done
-- Phase 2: done
-- Phase 3: done
-- Phase 4: done for current supported scope
-- Phase 5: done
-- Phase 6: done for current guarded backend scope
-- Phase 7: done for current validation slice
-- Phase 8: done for current upgrade slice
-- Validation status: Phase 0 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 1 unit/contract/integration/gray/real/Zero-Short validation passed-with-boundary for plan-only controller. Phase 2 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 3 unit/contract/integration/gray/real/Zero-Short validation passed. Phase 4 custom-node planning/check/sync, dependency dry-run, and remote import smoke validation passed. Phase 5 conversion-plan route validation passed for clean and LoRA workflows. Phase 6 guarded backend `/run` smoke, resource sync gray, and remote privacy validation passed. Phase 7 fail-closed, LoRA smoke, clean animal 20-step, and clean formal 20-step validation passed. Phase 8 final checks need rerun after latest changes.
+- Overall progress: v2 长程任务体系已建立并进入执行。v1 已实现并验证的 guarded runtime 能力作为 baseline 继承；本轮已补齐 workflow-level status/events/report helper、run_status route、client_event 写回 route、前端 plan-first polling 和 queue-after history aggregation。Phase 1/Phase 6 的准备、queue、sampling、complete 关键状态现在都能进入 workflow-level bundle；Phase 7 stale workflow/profile bypass、missing resource fail-closed、remote profile forbidden image gate 均已通过验证。仍需继续扩展完整真实 workflow matrix、custom-node/incompatible cases 和 release gate。
+- Phase 0 Plan Approval And Baseline Re-Freeze: pass
+- Phase 1 Workflow-Level Product Shell: pass-with-followup
+- Phase 2 Source Workflow Validity And Analysis: pass-with-boundary
+- Phase 3 Resource Sync And Path Mirror: pass-with-boundary
+- Phase 4 Custom Node Environment Manager: in progress
+- Phase 5 Fresh Conversion And Identity Guard: pass-with-followup
+- Phase 6 Orchestration, Progress And Recovery: in progress
+- Phase 7 Privacy And Fail-Closed Hardening: in progress
+- Phase 8 Real Workflow Validation Matrix: pass-with-boundary
+- Phase 9 Productization, Release And Maintenance: in progress
+- Validation status: v1 evidence exists and may be reused as baseline only after Phase 0 re-freeze. v2 Phase 1/Phase 6 backend contract、local UI、真实低步数 guarded smoke 均通过：`py_compile`、`node --check`、`git diff --check` 通过；plan-only probe 生成 `workflow_status.json`、`workflow_events.jsonl`、`workflow_runtime_report.txt` 并在 manifest 中写入 events/report hash；本地 ComfyUI 8188 已加载 `run_status` 和 `client_event` routes，workflow-level 面板截图和 fail-closed UI 截图已归档；远端包已同步；真实 run `workflow_runtime_20260705_121532_7fd71d73` / prompt `c125bf4d-bcdf-414a-b825-8256fe572499` 成功，底层 job 4/4 step 完成，`client_event` 将 upload/sampling/download 指标写回 workflow status/events/report，远端 job/output 无图片。Phase 7 stale bypass route-level probe 通过：旧 clean plan run_id 搭配不同 LoRA prompt 返回 HTTP 400 / `SourcePromptHashMismatch`，未创建 `resources_diff.json` 或 `converted_local_prompt.json`。Phase 7 missing resource probe 通过：缺失 UNET 返回 HTTP 400 / `LocalResourceMissing`，未创建 `resources_diff.json`、`converted_local_prompt.json` 或底层 job。Phase 7 remote profile privacy gate 通过：clean workflow 的 remote profile class list 为 `UNETLoader/CLIPLoader/Remote_Sampling_remote` 且 forbidden count 0；synthetic malicious profile 中 `VAEDecode/SaveImage` 被识别。
 - Residual risks:
   - 自定义节点跨 Windows/Linux 兼容性是最大风险。
   - 模型同步体积和耗时可能显著影响 UX。
@@ -329,7 +605,7 @@
 
 ## 下一步动作
 
-执行最终 `py_compile`、`git diff --check`、同步远端包、git add、commit、push，并确认 GitHub remote head。
+开始 Phase 9：执行 release readiness review，运行最终 py_compile / JS check / git diff check / local route load；确认是否需要 final smoke，然后完成 review、commit、push 和 remote head verification。
 
 ## 执行日志
 
@@ -344,3 +620,16 @@
 - 2026-07-05 00:50 +08:00: Phase 7 真实验证部分完成。缺失 LoRA workflow 在 `/remote_workflow/runtime/convert` 阶段 HTTP 400 fail-closed，未创建 job；真实 LoRA workflow guarded smoke 成功，profile 只含 Aella/xcn，远端 preflight 清单精确匹配；clean 20-step guarded formal run 成功且 profile LoRA count 为 0；Phase 7 成功 job 的远端 job/output 均无 PNG/JPG/JPEG/WEBP。证据写入 `docs/remote_workflow_runtime_upgrade/evidence/phase7_real_validation/`。
 - 2026-07-05 00:56 +08:00: Phase 8 当前升级切片完成。README、usage、conversion rules 更新为 workflow-level plugin 定位；`.gitignore` 排除 Playwright MCP 临时目录；本地和远端 `ComfyUI-Remote-Sampling` 包已同步；最终 `py_compile` 和 `git diff --check` 通过。证据写入 `docs/remote_workflow_runtime_upgrade/evidence/phase8_release/`。
 - 2026-07-05 04:08 +08:00: 继续补齐目标缺口。新增 `tools/sync_remote_resources.py`、`tools/remote_custom_node_import_smoke.py`、`tools/install_remote_custom_node_dependencies.py`；新增 `/remote_workflow/runtime/run` guarded backend path，前端 `Run Guarded` 改为调用该 route 后再 queue。真实 smoke `guarded_v2b_smoke_20260705_034610` 成功，manifest 含 source/analysis/resources diff/env/conversion/status hash；真实 LoRA guarded prepare `workflow_runtime_20260705_040251_7f49bf25` 含 dependency dry-run hash 和 import smoke hash；缺失 LoRA 在 `/run` 阶段 HTTP 400 且未创建 job；clean animal 20-step `guarded_clean_animal20_20260705_035631` 成功，LoRA count 为 0，输出为红熊猫且远端无图片输出。
+- 2026-07-05 04:16 +08:00: v2 计划体系进入执行。当前优先缺口为 workflow-level 长任务可观测性：为 `/remote_workflow/runtime/run` 的本地预检、资源检查/同步、自定义节点检查/同步、依赖计划、import smoke、转换和 queue-ready 阶段补齐 `workflow_status.json`、`workflow_events.jsonl`、report 和前端轮询读取入口。
+- 2026-07-05 04:24 +08:00: Phase 1/Phase 6 可观测性基础完成一轮实现。新增 workflow-level status/events/report helper、manifest observability hash、`/remote_workflow/runtime/run_status` route、existing-plan guarded run 复用路径；前端 `Run Guarded` 改为先 `/plan` 获取 `run_id`，轮询 `run_status`，再调用 `/run` 复用该 plan 并 queue converted prompt。验证：`py_compile`、`node --check`、`git diff --check` 通过；plan-only contract probe `workflow_runtime_20260705_042216_2f9bf94b` 生成 4 条 events、report 和 manifest events/report hash。证据见 `evidence/phase6_progress_recovery/workflow-status-events-contract-20260705.md`。
+- 2026-07-05 04:28 +08:00: 本地 UI 验证完成。更新后的 custom node 已同步到本地 ComfyUI 并重启 8188；API readiness 返回 `ready 2361 True True True`，确认 `workflow_run_status_route=True`。Playwright 截图 `workflow-runtime-panel-20260705.png` 和 `workflow-runtime-guarded-status-20260705.png` 已归档。当前 AuraFlow 画布触发 `Run Guarded` 后 fail-closed，生成 run `workflow_runtime_20260705_042623_165ae28d`，含 4 条 workflow events、report、manifest events/report hash，未进入远端采样。
+- 2026-07-05 04:34 +08:00: 远端同步和真实 smoke 通过。当前 `ComfyUI-Remote-Sampling` 包已同步到远端 `/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/ComfyUI-Remote-Sampling`，grep 确认包含 `run_status` route。低步数 clean guarded run `workflow_runtime_20260705_042940_2e199900` 成功，prompt id `1ae17b5e-8c90-446e-86a6-25ef051c62e8`，底层 job `remote_sampling_20260705_043003_c7affb69_workflow_status_real_smoke_20260705_0430_500` 上传 257978 bytes、采样 4/4、下载 394786 bytes。workflow bundle 含 15 条 events、report、status/events/report hash；远端 job 目录和远端 `ComfyUI/output` 无 PNG/JPG/JPEG/WEBP，8197 无监听，locks 清空。残余缺口：workflow-level status 当前停在 `queue`，queue 后采样/下载/完成仍需要从 prompt/job 进度聚合回 workflow 面板。
+- 2026-07-05 04:40 +08:00: 前端 queue 后聚合已实现。`Run Guarded` 在提交 converted prompt 后继续轮询 `/history/<prompt_id>`；运行中显示 workflow-level `sampling` 状态，完成后从 `Remote Sampling Report` 文本解析并显示 job id、总耗时、upload/sampling/download 指标。最新包已同步到本地和远端，远端 grep 确认 `Guarded remote workflow run completed.` 文案存在。残余缺口：这些 queue 后指标目前是前端从 ComfyUI history 观察，不会写回 workflow-level `workflow_status.json`。
+- 2026-07-05 12:19 +08:00: queue 后持久化缺口完成。新增 `POST /remote_workflow/runtime/client_event`，前端在 queue、sampling、complete、failed 时回写 workflow-level status/events/report。契约探针确认 `workflow_status.json` 更新到 `complete` 且 manifest status/events/report hash 刷新。真实 client_event smoke `workflow_runtime_20260705_121532_7fd71d73` 成功，prompt id `c125bf4d-bcdf-414a-b825-8256fe572499`，底层 job `remote_sampling_20260705_121605_b72e4fcf_workflow_client_event_smoke_20260705_0445_500` 采样 4/4，upload/sampling/download 指标已写回 workflow status details；远端 job/output 无图片，8197 无监听，locks 清空。
+- 2026-07-05 12:25 +08:00: Phase 7 stale workflow/profile bypass guard 完成。`_load_plan_for_run()` 现在在复用 `run_id` 时校验 supplied prompt/workflow hash 是否匹配 manifest 中的 source hash，不匹配则以 `SourcePromptHashMismatch` / `SourceWorkflowHashMismatch` 在 `local_preflight` fail-closed。函数级 probe `workflow_runtime_20260705_122113_f2d3b32b` 与 route 级 probe `workflow_runtime_20260705_122317_81f9a3c1` 均证明 mismatch 不会创建 `resources_diff.json`、`converted_local_prompt.json` 或远端 job。远端包已同步并 grep 确认包含 `SourcePromptHashMismatch`。证据见 `evidence/phase7_privacy_fail_closed/stale-workflow-profile-bypass-20260705.md`。
+- 2026-07-05 12:27 +08:00: Phase 7 missing resource fail-closed 通过。将 clean animal prompt 的 UNET 文件名替换为不存在的 `__codex_missing_unet_phase7_20260705__.safetensors` 后调用 `/remote_workflow/runtime/run`，返回 HTTP 400 / `LocalResourceMissing`，run `workflow_runtime_20260705_122636_257bebbc` 生成诊断 status/events/report，但未创建 `resources_diff.json`、`converted_local_prompt.json` 或任何 `missing_resource_phase7_20260705` 底层 job。证据见 `evidence/phase7_privacy_fail_closed/missing-resource-fail-closed-20260705.md`。
+- 2026-07-05 12:34 +08:00: Phase 7 remote profile forbidden image gate 通过。修正 privacy gate 边界：本地 converted prompt 允许保留 `VAEDecode/SaveImage`，真正检查 generated remote profile 可重建出的远端采样 prompt。clean workflow conversion `workflow_runtime_20260705_123226_ca571890` 的 remote class list 为 `UNETLoader/CLIPLoader/Remote_Sampling_remote`、forbidden count 0；synthetic malicious profile 中 `VAEDecode/SaveImage` 被识别为 forbidden。最新包已同步到本地和远端，远端 grep 确认包含 `remote_profile_prompt_reconstruction`。证据见 `evidence/phase7_privacy_fail_closed/remote-profile-forbidden-image-gate-20260705.md`。
+- 2026-07-05 13:20 +08:00: 使用 `project-lifecycle-workflow` 和 `construction-plan-system` 将 v2 升级整理为 Full Mode 长程任务体系。新增 `00_preflight_governance/`、`01_target_plans/`、`02_long_task_books/00_phase_execution_matrix.md`、`04_phase_start_checklists/`、`05_minimal_feasibility_probe/`、`06_pre_start_readiness_review.md`；manifest 和 README 已接入这些治理文件。DEV-GATE-04 更新为 `pass-with-boundary`，下一步保持在 Phase 7/8/9 执行链上继续验证与发布准备。
+- 2026-07-05 13:35 +08:00: Phase 8 真实验证矩阵完成汇总。新增 `evidence/phase8_real_validation/real_validation_report.md` 和 `phase_summary.md`，覆盖 clean animal、real LoRA、custom-node、missing-resource、incompatible-node、stale-bypass、remote privacy 七类场景。Phase 8 gate 结论为 `pass-with-boundary`；Phase 9 release readiness 可以开始。
+- 2026-07-05 13:45 +08:00: Phase 9 release readiness 启动。`py_compile`、`node --check`、`git diff --check` 通过；本地 8188 `/object_info` 和 `/remote_workflow/runtime/status` 加载正常；远端轻量检查显示 8197 无监听、无残留 ComfyUI/submit 进程、locks 清空、最近 180 分钟远端 `ComfyUI/output` 无图片输出。证据写入 `evidence/phase9_release/release_readiness_report.md`。剩余 gate：review、是否补 final smoke、commit/push/remote head。
+- 2026-07-05 13:55 +08:00: Phase 9 review 完成。新增 `evidence/phase9_release/review_report.md`，当前 diff 未发现 P0/P1；P2/P3 后续项包括通用 SSH backend、超大资源断点续传、cancel/retry UI 和更多 workflow fixture。release readiness 中 code review 状态更新为 `pass-with-boundary`。
