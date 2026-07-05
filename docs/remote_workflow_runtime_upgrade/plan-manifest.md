@@ -5,7 +5,7 @@
 - Plan ID: `remote-workflow-runtime-upgrade`
 - Version: `v2`
 - Created: `2026-07-04`
-- Last updated: `2026-07-05 13:35 +08:00`
+- Last updated: `2026-07-05 13:10 +08:00`
 - Project root: `F:\TieguoDun\Remote_comfyui`
 - Current branch: `main`
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_workflow_runtime_upgrade\01_remote_workflow_runtime_upgrade_task_book.md`
@@ -61,4 +61,4 @@
 - Current implementation still needs v2 product hardening: true workflow-level live progress, stronger resume/retry UX, formal custom-node fallback policy, broader fail-closed matrix, release/readme polish, and fresh validation evidence.
 - Current execution state: v2 long-task system is executing under the active thread goal. v1 evidence remains baseline evidence, not v2 completion.
 - Construction planning state: normalized into a Full Mode lifecycle/construction plan on `2026-07-05`; the canonical task book remains the progress ledger.
-- Latest gate movement: Phase 8 Real Workflow Validation Matrix is `pass-with-boundary`; Phase 9 Release Readiness is ready to start.
+- Latest gate movement: Phase 9 final guarded smoke passed; release gate is `pass-with-boundary` for the current supported workflow scope. Final commit and remote head are verified by Git command output.

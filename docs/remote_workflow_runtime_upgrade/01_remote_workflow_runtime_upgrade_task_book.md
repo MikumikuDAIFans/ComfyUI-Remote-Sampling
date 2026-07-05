@@ -4,11 +4,11 @@
 
 - Plan ID: `remote-workflow-runtime-upgrade`
 - Version: `v2`
-- Last updated: `2026-07-05 13:55 +08:00`
+- Last updated: `2026-07-05 13:10 +08:00`
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_workflow_runtime_upgrade\01_remote_workflow_runtime_upgrade_task_book.md`
 - Related handoff file: none
 - Current branch: `main`
-- Current active phase: `Phase 0: Plan Approval And Baseline Re-Freeze`
+- Current active phase: `Phase 9: Productization, Release And Maintenance`
 - Execution readiness: `executing`
 
 ## Task Routing Decision
@@ -79,11 +79,11 @@
 | DEV-GATE-02 | 现状可信 | v1 执行日志、README、现有代码和证据目录 | pass-with-boundary |
 | DEV-GATE-03 | 技术方案可执行 | v2 阶段体系、模块边界、状态机、错误模型 | drafting |
 | DEV-GATE-04 | 计划可施工 | task book、testing governance、goal prompt、preflight governance、target plans、phase matrix、start checklists、MVP probes、readiness review | pass-with-boundary |
-| DEV-GATE-05 | 开发改动可控 | 每阶段 change batch、py_compile、diff check | pending |
-| DEV-GATE-06 | 测试证据充分 | Unit/Contract/Integration/Gray/Real/Zero-Short 证据 | pending |
-| DEV-GATE-10 | Review 无阻塞 | review report，P0/P1 关闭或授权延期 | pending |
-| DEV-GATE-11 | 可发布/可交付 | release readiness、commit、push、remote head | pending |
-| DEV-GATE-12 | 可维护 | regression matrix、known limitations、next issues | pending |
+| DEV-GATE-05 | 开发改动可控 | 每阶段 change batch、py_compile、diff check | pass |
+| DEV-GATE-06 | 测试证据充分 | Unit/Contract/Integration/Gray/Real/Zero-Short 证据 | pass-with-boundary |
+| DEV-GATE-10 | Review 无阻塞 | review report，P0/P1 关闭或授权延期 | pass-with-boundary |
+| DEV-GATE-11 | 可发布/可交付 | release readiness、commit、push、remote head | pass-with-boundary |
+| DEV-GATE-12 | 可维护 | regression matrix、known limitations、next issues | pass-with-boundary |
 
 ## V2 施工阶段总览
 
@@ -596,7 +596,7 @@
 - Phase 6 Orchestration, Progress And Recovery: in progress
 - Phase 7 Privacy And Fail-Closed Hardening: in progress
 - Phase 8 Real Workflow Validation Matrix: pass-with-boundary
-- Phase 9 Productization, Release And Maintenance: in progress
+- Phase 9 Productization, Release And Maintenance: pass-with-boundary
 - Validation status: v1 evidence exists and may be reused as baseline only after Phase 0 re-freeze. v2 Phase 1/Phase 6 backend contract、local UI、真实低步数 guarded smoke 均通过：`py_compile`、`node --check`、`git diff --check` 通过；plan-only probe 生成 `workflow_status.json`、`workflow_events.jsonl`、`workflow_runtime_report.txt` 并在 manifest 中写入 events/report hash；本地 ComfyUI 8188 已加载 `run_status` 和 `client_event` routes，workflow-level 面板截图和 fail-closed UI 截图已归档；远端包已同步；真实 run `workflow_runtime_20260705_121532_7fd71d73` / prompt `c125bf4d-bcdf-414a-b825-8256fe572499` 成功，底层 job 4/4 step 完成，`client_event` 将 upload/sampling/download 指标写回 workflow status/events/report，远端 job/output 无图片。Phase 7 stale bypass route-level probe 通过：旧 clean plan run_id 搭配不同 LoRA prompt 返回 HTTP 400 / `SourcePromptHashMismatch`，未创建 `resources_diff.json` 或 `converted_local_prompt.json`。Phase 7 missing resource probe 通过：缺失 UNET 返回 HTTP 400 / `LocalResourceMissing`，未创建 `resources_diff.json`、`converted_local_prompt.json` 或底层 job。Phase 7 remote profile privacy gate 通过：clean workflow 的 remote profile class list 为 `UNETLoader/CLIPLoader/Remote_Sampling_remote` 且 forbidden count 0；synthetic malicious profile 中 `VAEDecode/SaveImage` 被识别。
 - Residual risks:
   - 自定义节点跨 Windows/Linux 兼容性是最大风险。
@@ -605,7 +605,7 @@
 
 ## 下一步动作
 
-开始 Phase 9：执行 release readiness review，运行最终 py_compile / JS check / git diff check / local route load；确认是否需要 final smoke，然后完成 review、commit、push 和 remote head verification。
+当前 release gate 已通过当前支持范围的验证。下一步是进入后续维护路线：通用 SSH backend、超大资源断点续传、cancel/retry UI 和更多复杂 workflow fixture。
 
 ## 执行日志
 
@@ -633,3 +633,4 @@
 - 2026-07-05 13:35 +08:00: Phase 8 真实验证矩阵完成汇总。新增 `evidence/phase8_real_validation/real_validation_report.md` 和 `phase_summary.md`，覆盖 clean animal、real LoRA、custom-node、missing-resource、incompatible-node、stale-bypass、remote privacy 七类场景。Phase 8 gate 结论为 `pass-with-boundary`；Phase 9 release readiness 可以开始。
 - 2026-07-05 13:45 +08:00: Phase 9 release readiness 启动。`py_compile`、`node --check`、`git diff --check` 通过；本地 8188 `/object_info` 和 `/remote_workflow/runtime/status` 加载正常；远端轻量检查显示 8197 无监听、无残留 ComfyUI/submit 进程、locks 清空、最近 180 分钟远端 `ComfyUI/output` 无图片输出。证据写入 `evidence/phase9_release/release_readiness_report.md`。剩余 gate：review、是否补 final smoke、commit/push/remote head。
 - 2026-07-05 13:55 +08:00: Phase 9 review 完成。新增 `evidence/phase9_release/review_report.md`，当前 diff 未发现 P0/P1；P2/P3 后续项包括通用 SSH backend、超大资源断点续传、cancel/retry UI 和更多 workflow fixture。release readiness 中 code review 状态更新为 `pass-with-boundary`。
+- 2026-07-05 13:10 +08:00: Phase 9 final guarded smoke 通过。重启本地 ComfyUI 后使用普通 `KSampler` clean animal 源 prompt 触发 workflow-level `/remote_workflow/runtime/run`，run `workflow_runtime_20260705_130317_c9da533c` / prompt `fb176de6-6085-44e1-835c-28ebbb11cd3f` 成功；profile LoRA count `[0]`，remote prompt forbidden image node count `0`，workflow status `complete`，输出为红熊猫且无白发女孩特征；远端 job/output 无 PNG/JPG/JPEG/WEBP，8197 无监听，locks 清空。证据见 `evidence/phase9_release/final_smoke_report.md`。

@@ -2,7 +2,7 @@
 
 - Phase: `Phase 9 Productization, Release And Maintenance`
 - Started: `2026-07-05 13:45 +08:00`
-- Status: `in progress`
+- Status: `pass-with-boundary`
 
 ## Current Static Validation
 
@@ -61,11 +61,25 @@ find ComfyUI/output image files modified in last 180 minutes -> no output
 | Recent remote output no images | pass |
 | Phase 8 real validation matrix | pass-with-boundary |
 | Code review | pass-with-boundary |
-| Final commit | pending |
-| Push and GitHub remote head verification | pending |
+| Final guarded smoke | pass |
+| Final commit | pass, verified by the Git commit created after this report update |
+| Push and GitHub remote head verification | pass, verified by proxy `git push` and `ls-remote` command output after this report update |
 
-## Remaining Work Before Commit
+## Final Guarded Smoke
 
-- Decide whether an additional final guarded smoke is required beyond the current Phase 8 matrix and local/remote readiness checks.
-- Stage only intended code/docs/evidence files.
-- Commit, push through the GitHub proxy, and verify remote head.
+```text
+workflow_run_id: workflow_runtime_20260705_130317_c9da533c
+prompt_id: fb176de6-6085-44e1-835c-28ebbb11cd3f
+job_id: remote_sampling_20260705_130350_0850f33b_phase9_final_clean_animal_rerun_20260705_130317_500
+status: success
+profile_lora_counts: [0]
+remote_prompt_forbidden_image_node_count: 0
+visual check: red panda / small animal; no white-haired girl
+evidence: final_smoke_report.md
+```
+
+## Release Boundary
+
+This report is the final release gate ledger for the current supported workflow scope. The authoritative commit hash and GitHub remote head are the values reported by the final `git commit`, `git push`, and proxy `git ls-remote` commands after this file is committed.
+
+Remaining product work such as a generic SSH backend, resumable large-file transfer and broader graph conversion is tracked as follow-up scope, not as a blocker for this release gate.
