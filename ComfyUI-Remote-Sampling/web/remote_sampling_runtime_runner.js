@@ -2,8 +2,15 @@ import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 
 const PANEL_ID = "remote-sampling-runtime-runner";
+const ENABLE_LEGACY_RUNTIME_PANEL_KEY = "remoteSampling.enableLegacyRuntimeRunner";
 
-window.__remoteSamplingRuntimeRunnerVersion = "20260704-runtime-v1";
+window.__remoteSamplingRuntimeRunnerVersion = "20260705-legacy-hidden-v1";
+
+function legacyPanelEnabled() {
+  const params = new URLSearchParams(window.location.search || "");
+  if (params.get("remoteSamplingLegacyRunner") === "1") return true;
+  return window.localStorage?.getItem(ENABLE_LEGACY_RUNTIME_PANEL_KEY) === "1";
+}
 
 function ensureStyle() {
   if (document.getElementById(`${PANEL_ID}-style`)) return;
@@ -234,6 +241,12 @@ async function runCurrentWorkflow(panel) {
 app.registerExtension({
   name: "ComfyUI.RemoteSampling.RuntimeRunner",
   async setup() {
+    if (!legacyPanelEnabled()) {
+      console.info(
+        "Remote Sampling legacy runtime runner panel is hidden. Enable it with localStorage.setItem('remoteSampling.enableLegacyRuntimeRunner', '1') or ?remoteSamplingLegacyRunner=1.",
+      );
+      return;
+    }
     createPanel();
   },
 });
