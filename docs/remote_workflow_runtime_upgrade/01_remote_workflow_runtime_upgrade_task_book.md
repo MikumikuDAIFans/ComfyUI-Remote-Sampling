@@ -4,7 +4,7 @@
 
 - Plan ID: `remote-workflow-runtime-upgrade`
 - Version: `v2`
-- Last updated: `2026-07-05 13:10 +08:00`
+- Last updated: `2026-07-05 13:18 +08:00`
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_workflow_runtime_upgrade\01_remote_workflow_runtime_upgrade_task_book.md`
 - Related handoff file: none
 - Current branch: `main`
@@ -586,15 +586,15 @@
   - Remote temporary port: `8197`
   - Current branch: `main`
 
-- Overall progress: v2 长程任务体系已建立并进入执行。v1 已实现并验证的 guarded runtime 能力作为 baseline 继承；本轮已补齐 workflow-level status/events/report helper、run_status route、client_event 写回 route、前端 plan-first polling 和 queue-after history aggregation。Phase 1/Phase 6 的准备、queue、sampling、complete 关键状态现在都能进入 workflow-level bundle；Phase 7 stale workflow/profile bypass、missing resource fail-closed、remote profile forbidden image gate 均已通过验证。仍需继续扩展完整真实 workflow matrix、custom-node/incompatible cases 和 release gate。
+- Overall progress: v2 workflow-level remote runtime upgrade has reached `pass-with-boundary` for the current supported workflow scope. v1 guarded runtime ability was revalidated as baseline; workflow-level status/events/report, `run_status`, `client_event`, plan-first polling, queue/sampling/complete aggregation, stale workflow/profile guard, missing-resource fail-closed, remote profile privacy gate, real workflow matrix and final release smoke are all evidenced. Remaining work is maintenance/follow-up scope: generic SSH backend, resumable large-file transfer, richer cancel/retry UX and broader graph fixture coverage.
 - Phase 0 Plan Approval And Baseline Re-Freeze: pass
 - Phase 1 Workflow-Level Product Shell: pass-with-followup
 - Phase 2 Source Workflow Validity And Analysis: pass-with-boundary
 - Phase 3 Resource Sync And Path Mirror: pass-with-boundary
-- Phase 4 Custom Node Environment Manager: in progress
+- Phase 4 Custom Node Environment Manager: pass-with-boundary
 - Phase 5 Fresh Conversion And Identity Guard: pass-with-followup
-- Phase 6 Orchestration, Progress And Recovery: in progress
-- Phase 7 Privacy And Fail-Closed Hardening: in progress
+- Phase 6 Orchestration, Progress And Recovery: pass-with-boundary
+- Phase 7 Privacy And Fail-Closed Hardening: pass-with-boundary
 - Phase 8 Real Workflow Validation Matrix: pass-with-boundary
 - Phase 9 Productization, Release And Maintenance: pass-with-boundary
 - Validation status: v1 evidence exists and may be reused as baseline only after Phase 0 re-freeze. v2 Phase 1/Phase 6 backend contract、local UI、真实低步数 guarded smoke 均通过：`py_compile`、`node --check`、`git diff --check` 通过；plan-only probe 生成 `workflow_status.json`、`workflow_events.jsonl`、`workflow_runtime_report.txt` 并在 manifest 中写入 events/report hash；本地 ComfyUI 8188 已加载 `run_status` 和 `client_event` routes，workflow-level 面板截图和 fail-closed UI 截图已归档；远端包已同步；真实 run `workflow_runtime_20260705_121532_7fd71d73` / prompt `c125bf4d-bcdf-414a-b825-8256fe572499` 成功，底层 job 4/4 step 完成，`client_event` 将 upload/sampling/download 指标写回 workflow status/events/report，远端 job/output 无图片。Phase 7 stale bypass route-level probe 通过：旧 clean plan run_id 搭配不同 LoRA prompt 返回 HTTP 400 / `SourcePromptHashMismatch`，未创建 `resources_diff.json` 或 `converted_local_prompt.json`。Phase 7 missing resource probe 通过：缺失 UNET 返回 HTTP 400 / `LocalResourceMissing`，未创建 `resources_diff.json`、`converted_local_prompt.json` 或底层 job。Phase 7 remote profile privacy gate 通过：clean workflow 的 remote profile class list 为 `UNETLoader/CLIPLoader/Remote_Sampling_remote` 且 forbidden count 0；synthetic malicious profile 中 `VAEDecode/SaveImage` 被识别。

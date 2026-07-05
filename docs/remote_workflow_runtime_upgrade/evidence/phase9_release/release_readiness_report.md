@@ -83,3 +83,12 @@ evidence: final_smoke_report.md
 This report is the final release gate ledger for the current supported workflow scope. The authoritative commit hash and GitHub remote head are the values reported by the final `git commit`, `git push`, and proxy `git ls-remote` commands after this file is committed.
 
 Remaining product work such as a generic SSH backend, resumable large-file transfer and broader graph conversion is tracked as follow-up scope, not as a blocker for this release gate.
+
+## Phase Ledger Consistency
+
+All Phase 0-9 gates are now either `pass` or `pass-with-boundary` for the current supported workflow scope. The boundaries are explicit:
+
+- unsupported complex workflow graph shapes fail closed;
+- unknown custom-node Linux compatibility must be proven by import smoke or fail closed;
+- unknown network dependency installation requires operator approval;
+- large-file resumability and generic SSH backend are follow-up product hardening, not blockers for the current release gate.
