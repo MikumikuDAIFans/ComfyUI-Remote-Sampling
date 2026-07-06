@@ -3,6 +3,7 @@ import { api } from "/scripts/api.js";
 
 const PANEL_ID = "remote-workflow-runtime-controller";
 const CONFIG_KEY = "remoteWorkflowRuntime.config.v1";
+const POSITION_KEY = "remoteWorkflowRuntime.position.v1";
 const DEFAULT_CONFIG = {
   project_root: "F:\\TieguoDun\\Remote_comfyui",
   python_executable: "C:\\Python314\\python.exe",
@@ -45,6 +46,8 @@ function ensureStyle() {
       padding: 10px 12px;
       border-bottom: 1px solid #263244;
       background: #172033;
+      cursor: move;
+      user-select: none;
     }
     #${PANEL_ID} .rwr-title {
       color: #f8fafc;
@@ -53,6 +56,7 @@ function ensureStyle() {
     #${PANEL_ID} .rwr-actions {
       display: flex;
       gap: 8px;
+      cursor: default;
     }
     #${PANEL_ID} button {
       border: 1px solid #22d3ee;
@@ -206,6 +210,87 @@ function loadRuntimeConfig() {
 
 function saveRuntimeConfig(config) {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+function clampPanelPosition(left, top, panel) {
+  const margin = 8;
+  const rect = panel.getBoundingClientRect();
+  const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
+  const maxTop = Math.max(margin, window.innerHeight - rect.height - margin);
+  return {
+    left: Math.min(Math.max(margin, left), maxLeft),
+    top: Math.min(Math.max(margin, top), maxTop),
+  };
+}
+
+function loadPanelPosition() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(POSITION_KEY) || "null");
+    if (saved && Number.isFinite(saved.left) && Number.isFinite(saved.top)) {
+      return saved;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function savePanelPosition(panel) {
+  const rect = panel.getBoundingClientRect();
+  localStorage.setItem(POSITION_KEY, JSON.stringify({ left: Math.round(rect.left), top: Math.round(rect.top) }));
+}
+
+function applyPanelPosition(panel) {
+  const saved = loadPanelPosition();
+  if (!saved) return;
+  const next = clampPanelPosition(saved.left, saved.top, panel);
+  panel.style.left = `${next.left}px`;
+  panel.style.top = `${next.top}px`;
+  panel.style.right = "auto";
+  panel.style.bottom = "auto";
+}
+
+function enablePanelDrag(panel) {
+  const header = panel.querySelector(".rwr-header");
+  if (!header) return;
+  let drag = null;
+  header.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("button")) return;
+    const rect = panel.getBoundingClientRect();
+    drag = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+    };
+    panel.style.left = `${rect.left}px`;
+    panel.style.top = `${rect.top}px`;
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    header.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  header.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const next = clampPanelPosition(event.clientX - drag.offsetX, event.clientY - drag.offsetY, panel);
+    panel.style.left = `${next.left}px`;
+    panel.style.top = `${next.top}px`;
+  });
+  const finish = (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag = null;
+    savePanelPosition(panel);
+  };
+  header.addEventListener("pointerup", finish);
+  header.addEventListener("pointercancel", finish);
+  window.addEventListener("resize", () => {
+    const rect = panel.getBoundingClientRect();
+    const next = clampPanelPosition(rect.left, rect.top, panel);
+    panel.style.left = `${next.left}px`;
+    panel.style.top = `${next.top}px`;
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    savePanelPosition(panel);
+  });
 }
 
 function configFromPanel(panel) {
@@ -745,6 +830,8 @@ function createPanel() {
     </div>
   `;
   document.body.appendChild(panel);
+  applyPanelPosition(panel);
+  enablePanelDrag(panel);
   panel.querySelector(".rwr-toggle").addEventListener("click", () => {
     panel.classList.toggle("collapsed");
     panel.querySelector(".rwr-toggle").textContent = panel.classList.contains("collapsed") ? "Show" : "Hide";
