@@ -730,6 +730,23 @@ def _history_has_execution_error(item: dict[str, Any] | None) -> bool:
     return False
 
 
+def _sync_required_custom_node_packages(report: dict[str, Any]) -> list[str]:
+    packages: list[str] = []
+    for package in report.get("packages", []) or []:
+        if not isinstance(package, dict):
+            continue
+        if package.get("action") != "sync_required":
+            continue
+        name = str(package.get("package_name") or "").strip()
+        if name:
+            packages.append(name)
+    return sorted(set(packages), key=str.casefold)
+
+
+def _safe_report_stem(value: str) -> str:
+    return "".join(char if char.isalnum() or char in ("-", "_", ".") else "_" for char in value) or "package"
+
+
 def _backend_queue_worker(project_root: str | Path | None, run_id: str, api_base: str, timeout_sec: int) -> None:
     project_path = Path(project_root) if project_root else DEFAULT_PROJECT_ROOT
     run_dir = _run_dir_for(project_path, run_id)
@@ -1380,25 +1397,77 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
     if int(report.get("summary", {}).get("sync_required", 0)) > 0:
         if not auto_sync:
             return _fail_with_plan(plan, "remote_env", "CustomNodeSyncRequired", "Remote custom nodes are missing and auto_sync_custom_nodes is disabled.", details=report)
+        required_packages = _sync_required_custom_node_packages(report)
+        if not required_packages:
+            return _fail_with_plan(
+                plan,
+                "remote_env",
+                "CustomNodeSyncRequiredButNoPackages",
+                "Remote custom-node report says sync is required, but no package action was marked sync_required.",
+                details=report,
+            )
         _write_workflow_status(
             run_dir,
             str(plan["run_id"]),
             "remote_env",
             "Syncing missing remote custom-node packages.",
             overall_percent=58,
-            details=report.get("summary", {}),
+            details={**report.get("summary", {}), "sync_required_packages": required_packages},
         )
-        recheck_stdout = _run_project_tool(
-            project_root,
-            [
-                str(project_root / "tools" / "sync_remote_custom_nodes.py"),
-                str(custom_nodes_plan_path),
-                "--output",
-                str(sync_report_path),
-            ],
-            timeout=7200,
-        )
-        sync_report = _read_json_file(sync_report_path)
+        package_reports: list[dict[str, Any]] = []
+        recheck_stdout_parts: list[str] = []
+        for index, package_name in enumerate(required_packages, start=1):
+            package_report_path = run_dir / f"custom_nodes_sync_report.{_safe_report_stem(package_name)}.json"
+            _write_workflow_status(
+                run_dir,
+                str(plan["run_id"]),
+                "remote_env",
+                f"Syncing custom-node package {index}/{len(required_packages)}: {package_name}",
+                overall_percent=58 + (index - 1) / max(1, len(required_packages)) * 2,
+                details={
+                    **report.get("summary", {}),
+                    "sync_required_packages": required_packages,
+                    "current_package": package_name,
+                    "package_index": index,
+                    "package_count": len(required_packages),
+                },
+            )
+            package_stdout = _run_project_tool(
+                project_root,
+                [
+                    str(project_root / "tools" / "sync_remote_custom_nodes.py"),
+                    str(custom_nodes_plan_path),
+                    "--package",
+                    package_name,
+                    "--output",
+                    str(package_report_path),
+                ],
+                timeout=7200,
+            )
+            recheck_stdout_parts.append(package_stdout)
+            if not package_report_path.is_file():
+                return _fail_with_plan(
+                    plan,
+                    "remote_env",
+                    "CustomNodeSyncDidNotWriteReport",
+                    f"Custom-node sync did not write report for package {package_name}.",
+                    details={"stdout_tail": package_stdout[-4000:], "package_name": package_name},
+                )
+            package_reports.append(_read_json_file(package_report_path))
+        sync_report = {
+            "schema_version": "custom-node-sync-report-v1",
+            "synced_at": _now_text(),
+            "packages": [item for report_item in package_reports for item in report_item.get("packages", [])],
+            "summary": {
+                "package_count": sum(int(report_item.get("summary", {}).get("package_count", 0)) for report_item in package_reports),
+                "synced": sum(int(report_item.get("summary", {}).get("synced", 0)) for report_item in package_reports),
+                "dry_run": False,
+                "requested_packages": required_packages,
+            },
+            "fatal": any(bool(report_item.get("fatal")) for report_item in package_reports),
+            "per_package_reports": [str(run_dir / f"custom_nodes_sync_report.{_safe_report_stem(name)}.json") for name in required_packages],
+        }
+        write_json(sync_report_path, sync_report)
         _write_workflow_status(
             run_dir,
             str(plan["run_id"]),
@@ -1424,7 +1493,7 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
                 "remote_env",
                 "RemoteCheckDidNotWriteReport",
                 "Remote custom node checker did not write remote_environment_report.json after sync.",
-                details={"stdout_tail": recheck_stdout[-4000:]},
+                details={"stdout_tail": "\n".join(recheck_stdout_parts)[-4000:]},
             )
         report = _read_json_file(env_report_path)
     if report.get("fatal") or int(report.get("summary", {}).get("sync_required", 0)) > 0:

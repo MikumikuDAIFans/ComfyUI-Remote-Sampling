@@ -79,6 +79,20 @@ class PostReviewHardeningTests(unittest.TestCase):
             os.environ.clear()
             os.environ.update(old_env)
 
+    def test_sync_required_custom_node_packages_filters_ready_packages(self):
+        runtime = load_module("workflow_runtime_test_filter", "ComfyUI-Remote-Sampling/workflow_runtime.py")
+        report = {
+            "packages": [
+                {"package_name": "ready_pkg", "action": "ready_for_import_smoke"},
+                {"package_name": "missing_pkg", "action": "sync_required"},
+                {"package_name": "another_missing", "action": "sync_required"},
+            ]
+        }
+        self.assertEqual(
+            runtime._sync_required_custom_node_packages(report),
+            ["another_missing", "missing_pkg"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
