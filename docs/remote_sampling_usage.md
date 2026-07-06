@@ -37,7 +37,18 @@ Remote_Sampling_local
 
 - `Plan Current Workflow`：只分析当前画布，生成 `workflow_analysis.json`、`resources_plan.json`、`custom_nodes_plan.json`，不排队。
 - `Convert`：从当前画布重新生成本次专属 `converted_local_prompt.json` 和 `remote_execution_plan.json`，不排队。
-- `Run Guarded`：先创建 workflow-level plan 并显示准备阶段进度；随后执行远端资源检查/同步、自定义节点检查/同步、依赖安装计划、远端 `object_info` import smoke，再从当前画布重新转换；全部通过后把 converted prompt 提交到 ComfyUI 队列。
+- `Run Guarded`：先创建 workflow-level plan 并显示准备阶段进度；随后执行远端资源检查/同步、自定义节点检查/同步、依赖安装计划、远端 `object_info` import smoke，再从当前画布重新转换；全部通过后由后端 watcher 把 converted prompt 提交到 ComfyUI 队列并轮询 `/history` 写回终态。
+
+面板内的 `Runtime Config` 可配置并持久化：
+
+```text
+project_root
+python_executable
+local_comfy_api
+timeout_sec
+remote_executor
+remote_profile
+```
 
 旧的 `Remote Sampling` 面板 `Run Current Workflow` 仍保留为兼容入口，但后续正式能力会优先落在 `Remote Workflow Runtime`。
 
@@ -70,10 +81,10 @@ manifest.json
 `Run Guarded` 前端会轮询：
 
 ```text
-/remote_workflow/runtime/run_status?run_id=<workflow_runtime_run_id>
+/remote_workflow/runtime/run_status?run_id=<workflow_runtime_run_id>&project_root=<project_root>
 ```
 
-因此资源检查、资源同步、自定义节点同步、依赖计划、import smoke、转换和 queue-ready 等阶段可以在面板中实时或准实时看到，而不需要等后端请求完全结束后再刷新。
+因此资源检查、资源同步、自定义节点同步、依赖计划、import smoke、转换、queue、sampling 和 complete/failed 等阶段可以在面板中实时或准实时看到。queue 后终态由后端 watcher 写入，即使浏览器刷新或关闭，run bundle 仍应最终进入 `complete` 或 `failed`。
 
 `run_id` 复用规则：
 
@@ -137,6 +148,23 @@ timeout_sec: 3600
 
 ```powershell
 python F:\TieguoDun\Remote_comfyui\tools\remote_comfy_service.py stop
+```
+
+`remote_comfy_service.py stop` 只会停止带有匹配 owner token 的 tmux service，不再使用宽泛 `pkill` 兜底。如果端口上有非本工具持有的进程，会 fail-closed 并要求人工处理。
+
+自定义节点同步建议先 dry-run：
+
+```powershell
+python F:\TieguoDun\Remote_comfyui\tools\sync_remote_custom_nodes.py <custom_nodes_plan.json> --dry-run
+```
+
+同步脚本会拒绝写入 `/home/user02/remote_ComfyUI/ComfyUI/custom_nodes` 之外的路径，并在正式替换前备份远端已有目录。
+
+公开 SSH 环境可使用：
+
+```powershell
+$env:REMOTE_SAMPLING_SERVER_EXEC="F:\TieguoDun\Remote_comfyui\tools\generic_ssh_exec.py"
+$env:REMOTE_SAMPLING_SSH_TARGET="user@example.com"
 ```
 
 ### 转换已有 API workflow

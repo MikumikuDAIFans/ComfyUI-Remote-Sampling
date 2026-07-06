@@ -12,15 +12,18 @@ This directory is the canonical planning system for repositioning `ComfyUI-Remot
 - `00_preflight_governance/`: gate checklist, change control, failure templates and risk authorization rules.
 - `01_target_plans/`: target-level acceptance plans.
 - `02_long_task_books/00_phase_execution_matrix.md`: compact Phase 0-9 execution matrix.
+- `02_long_task_books/post_review_hardening_task_book.md`: follow-up hardening plan from the comprehensive review findings.
 - `04_phase_start_checklists/`: phase start gates.
 - `05_minimal_feasibility_probe/`: high-risk feasibility probes.
 - `06_pre_start_readiness_review.md`: readiness review and remaining boundaries.
+- `03_goal_prompt_post_review_hardening.md`: copy-ready `/goal` prompt for the follow-up hardening wave.
 
 ## Current Status
 
 - Execution readiness: `executing`
 - Current active phase: see `01_remote_workflow_runtime_upgrade_task_book.md`.
 - Next action: continue incomplete Phase 7/8 real validation, then Phase 9 release readiness.
+- Follow-up next action: review and approve `02_long_task_books/post_review_hardening_task_book.md` before starting the hardening wave.
 
 ## Planning Mode
 

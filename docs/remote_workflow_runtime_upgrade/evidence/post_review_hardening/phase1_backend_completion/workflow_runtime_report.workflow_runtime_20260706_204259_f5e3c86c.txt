@@ -1,0 +1,53 @@
+# Remote Workflow Runtime Report
+
+run_id: workflow_runtime_20260706_204259_f5e3c86c
+stage: complete
+ok: True
+updated_at: 2026-07-06 20:44:51
+
+## Status
+stage: complete
+message: Guarded remote workflow run completed.
+overall_percent: 100.0
+
+## Hash Chain
+source_prompt_sha256: f7ed34e527a8b2b1077e30ca4965cf515d7cbde35b5642d0dca7a16d56c2feb2
+source_workflow_sha256: aaaebf44c71c09cf7b81a70c76e75c7bd4c05f61b7866a2cc68d47d8eaf5c5f8
+workflow_analysis_sha256: 3309dabd0861be85600b91251c087489039f797198d3a8cdb170e9d9db345824
+resources_plan_sha256: a39649b6c7e2a7bb6b5df35bf501e6542484bea20e7bc75f2ab64b5b4d397113
+resources_diff_sha256: 4f7b26badc4916ca76dac9433672f8a876a80724f85bedc41e67400180522ff0
+custom_nodes_plan_sha256: 7668f905a6158c0d59fe17eba211d1a46a2293263a8f34f6cab8dbe08f850987
+remote_environment_report_sha256: 0b931602f3555a7d16336d98320ed69f69222ac5a10a38d50f45d3324aabf2a5
+remote_custom_node_dependency_install_sha256: 9f6d1dadbda304bdc5cb86d566a8a52334873a761e0225080f79b13315e7b959
+remote_custom_node_import_smoke_sha256: 042f6760dcad03b2cfee9f3fdac96840c7a5269f03773eb4da7ff8a71b543fcc
+converted_local_prompt_sha256: b8bdfbf67963c277bbaaf6ea478e1f2d74f25db0440688550b82b41e3a9ed9ca
+remote_execution_plan_sha256: 5ffd039cbbe6a580ecd0f2d6332322f2343b3a4ff0971ede04ee5327ff491dc0
+runtime_conversion_manifest_sha256: 7fd2dd3f8ae342910846243d54bf3767e48d51319141ba0899a12475369899ee
+
+## Recent Events
+- 2026-07-06 20:42:59 [local_preflight/status] Workflow runtime plan started. (4.0%)
+- 2026-07-06 20:42:59 [analysis/status] Analyzing source workflow and extracting resource/custom-node dependencies. (12.0%)
+- 2026-07-06 20:42:59 [resource_plan/status] Building resource and custom-node plans from workflow analysis. (24.0%)
+- 2026-07-06 20:42:59 [analysis/status] Workflow-level runtime plan generated. Remote resource diff and custom-node environment checks are separate guarded steps. (30.0%)
+- 2026-07-06 20:43:00 [local_preflight/status] Loaded existing workflow runtime plan for guarded preparation. (32.0%)
+- 2026-07-06 20:43:00 [resource_plan/status] Checking remote model and LoRA resources before latent upload. (36.0%)
+- 2026-07-06 20:43:09 [resource_plan/status] Remote resource diff completed. (42.0%)
+- 2026-07-06 20:43:09 [sync/status] Remote resources are ready. (52.0%)
+- 2026-07-06 20:43:09 [remote_env/status] Checking remote custom-node packages. (54.0%)
+- 2026-07-06 20:43:17 [remote_env/status] Remote custom-node environment diff completed. (56.0%)
+- 2026-07-06 20:43:17 [remote_env/status] Preparing remote custom-node dependency plan. (62.0%)
+- 2026-07-06 20:43:17 [remote_env/status] Running remote ComfyUI custom-node import smoke. (66.0%)
+- 2026-07-06 20:43:25 [remote_env/status] Remote custom-node environment is ready. (70.0%)
+- 2026-07-06 20:43:25 [convert/status] Generating fresh converted prompt and remote execution plan from the current source workflow. (74.0%)
+- 2026-07-06 20:43:25 [convert/status] Workflow-level conversion generated without queue submission. (82.0%)
+- 2026-07-06 20:43:25 [queue/status] Guarded workflow runtime is ready to queue. Backend watcher should submit converted_prompt_object to ComfyUI. (72.0%)
+- 2026-07-06 20:43:25 [queue/status] Backend watcher thread started. (73.0%)
+- 2026-07-06 20:43:26 [queue/status] Backend watcher is submitting converted prompt to local ComfyUI. (74.0%)
+- 2026-07-06 20:43:26 [sampling/status] Backend watcher queued prompt; waiting for ComfyUI history terminal state. (78.0%)
+- 2026-07-06 20:43:26 [sampling/status] Backend watcher is polling ComfyUI history. (84.0%)
+- 2026-07-06 20:43:41 [sampling/status] Backend watcher is polling ComfyUI history. (84.0%)
+- 2026-07-06 20:43:56 [sampling/status] Backend watcher is polling ComfyUI history. (84.0%)
+- 2026-07-06 20:44:11 [sampling/status] Backend watcher is polling ComfyUI history. (84.0%)
+- 2026-07-06 20:44:26 [sampling/status] Backend watcher is polling ComfyUI history. (84.0%)
+- 2026-07-06 20:44:41 [sampling/status] Backend watcher is polling ComfyUI history. (84.0%)
+- 2026-07-06 20:44:51 [complete/status] Guarded remote workflow run completed. (100.0%)

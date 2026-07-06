@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "output": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase3_remote_safety\\safe_dry_run_report.json",
+  "summary": {
+    "package_count": 1,
+    "synced": 0,
+    "dry_run": true
+  }
+}

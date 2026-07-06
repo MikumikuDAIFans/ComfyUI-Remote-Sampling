@@ -108,10 +108,31 @@ def discover_package_for_class(class_name: str, local_comfy_root: Path = DEFAULT
         return None
     matches.sort(key=lambda item: (-int(item["score"]), len(str(item["package_dir"])), str(item["package_dir"]).casefold()))
     best = matches[0]
+    tied = [item for item in matches if int(item["score"]) == int(best["score"])]
+    if len(tied) > 1:
+        return {
+            "ambiguous": True,
+            "discovery_method": "text_scan",
+            "class_name": class_name,
+            "candidates": [
+                {
+                    "package_name": item["package_dir"].name,
+                    "local_path": str(item["package_dir"]),
+                    "matched_files": item["matched_files"],
+                    "score": item["score"],
+                    "git_remote": git_remote_url(item["package_dir"]),
+                    "dependency_files": dependency_files(item["package_dir"]),
+                }
+                for item in tied
+            ],
+        }
     package_dir = best["package_dir"]
     return {
         "package_name": package_dir.name,
         "local_path": str(package_dir),
+        "discovery_method": "text_scan",
+        "discovery_score": best["score"],
+        "candidate_count": len(matches),
         "matched_files": best["matched_files"],
         "git_remote": git_remote_url(package_dir),
         "dependency_files": dependency_files(package_dir),
@@ -147,6 +168,28 @@ def build_custom_nodes_plan(
                     "type": "CustomNodePackageNotFound",
                     "message": f"Cannot discover local custom node package for {class_name}",
                     "class_name": class_name,
+                    "fatal": True,
+                }
+            )
+        elif package.get("ambiguous"):
+            candidates = package.get("candidates", [])
+            item = {
+                "class_name": class_name,
+                "local_package": None,
+                "remote_package": None,
+                "sync": {
+                    "action": "blocked_ambiguous_local_package",
+                    "reason": "Multiple local custom node packages matched this class with the same score.",
+                    "repair_hint": f"Manually identify which package registers class {class_name!r}; then remove duplicate stale packages or add an explicit mapping.",
+                    "candidates": candidates,
+                },
+            }
+            errors.append(
+                {
+                    "type": "CustomNodePackageAmbiguous",
+                    "message": f"Ambiguous local custom node package for {class_name}",
+                    "class_name": class_name,
+                    "candidates": candidates,
                     "fatal": True,
                 }
             )

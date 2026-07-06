@@ -1,0 +1,79 @@
+{
+  "schema_version": "custom-nodes-plan-v1",
+  "local_comfy_root": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase4_discovery_ssh\\fixture_comfy",
+  "local_custom_nodes_root": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase4_discovery_ssh\\fixture_comfy\\custom_nodes",
+  "remote_base": "/home/user02/remote_ComfyUI",
+  "remote_custom_nodes_root": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes",
+  "classes": [
+    {
+      "class_name": "AmbiguousNode",
+      "local_package": null,
+      "remote_package": null,
+      "sync": {
+        "action": "blocked_ambiguous_local_package",
+        "reason": "Multiple local custom node packages matched this class with the same score.",
+        "repair_hint": "Manually identify which package registers class 'AmbiguousNode'; then remove duplicate stale packages or add an explicit mapping.",
+        "candidates": [
+          {
+            "package_name": "PkgA",
+            "local_path": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase4_discovery_ssh\\fixture_comfy\\custom_nodes\\PkgA",
+            "matched_files": [
+              "__init__.py"
+            ],
+            "score": 8,
+            "git_remote": null,
+            "dependency_files": []
+          },
+          {
+            "package_name": "PkgB",
+            "local_path": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase4_discovery_ssh\\fixture_comfy\\custom_nodes\\PkgB",
+            "matched_files": [
+              "__init__.py"
+            ],
+            "score": 8,
+            "git_remote": null,
+            "dependency_files": []
+          }
+        ]
+      }
+    }
+  ],
+  "packages": [],
+  "summary": {
+    "custom_class_count": 1,
+    "package_count": 0,
+    "local_package_missing": 1,
+    "needs_remote_check": 0
+  },
+  "errors": [
+    {
+      "type": "CustomNodePackageAmbiguous",
+      "message": "Ambiguous local custom node package for AmbiguousNode",
+      "class_name": "AmbiguousNode",
+      "candidates": [
+        {
+          "package_name": "PkgA",
+          "local_path": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase4_discovery_ssh\\fixture_comfy\\custom_nodes\\PkgA",
+          "matched_files": [
+            "__init__.py"
+          ],
+          "score": 8,
+          "git_remote": null,
+          "dependency_files": []
+        },
+        {
+          "package_name": "PkgB",
+          "local_path": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase4_discovery_ssh\\fixture_comfy\\custom_nodes\\PkgB",
+          "matched_files": [
+            "__init__.py"
+          ],
+          "score": 8,
+          "git_remote": null,
+          "dependency_files": []
+        }
+      ],
+      "fatal": true
+    }
+  ],
+  "fatal": true
+}

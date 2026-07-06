@@ -1,0 +1,9 @@
+{
+  "packages": [
+    {
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase3_remote_safety\\dummy_pkg",
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/safe_pkg",
+      "package_name": "safe_pkg"
+    }
+  ]
+}

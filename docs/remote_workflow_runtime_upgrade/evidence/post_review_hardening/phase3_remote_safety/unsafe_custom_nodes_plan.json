@@ -1,0 +1,9 @@
+{
+  "packages": [
+    {
+      "remote_path": "/tmp/evil_pkg",
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase3_remote_safety\\dummy_pkg",
+      "package_name": "evil_pkg"
+    }
+  ]
+}

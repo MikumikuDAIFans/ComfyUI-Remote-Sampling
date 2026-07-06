@@ -4,6 +4,7 @@ import time
 import uuid
 import importlib.util
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -100,6 +101,8 @@ STATE_MACHINE = [
     "complete",
     "failed",
 ]
+_BACKEND_WATCHER_LOCK = threading.Lock()
+_BACKEND_WATCHERS: dict[str, threading.Thread] = {}
 
 
 def make_workflow_run_id() -> str:
@@ -282,7 +285,7 @@ def workflow_runtime_status() -> dict[str, Any]:
         "state_machine": STATE_MACHINE,
         "capabilities": {
             "plan_current_workflow": True,
-            "run_current_workflow": "guarded_prepare_then_frontend_queue",
+            "run_current_workflow": "guarded_prepare_then_backend_queue",
             "resource_sync": "upload_required_resources_before_queue",
             "custom_node_sync": "archive_tool_available",
             "runtime_conversion_backend": CONVERTER_VERSION,
@@ -291,6 +294,13 @@ def workflow_runtime_status() -> dict[str, Any]:
             "formal_entry": "workflow_level_controller",
             "workflow_status_events": True,
             "workflow_run_status_route": True,
+            "workflow_backend_queue_watcher": True,
+            "workflow_runtime_config": {
+                "project_root": "payload.project_root or payload.options.project_root",
+                "python_executable": "payload.options.python_executable",
+                "local_comfy_api": "payload.local_comfy_api",
+                "timeout_sec": "payload.timeout_sec or payload.options.timeout_sec",
+            },
         },
     }
 
@@ -528,8 +538,17 @@ def read_workflow_runtime_run_status(project_root: str | Path | None, run_id: st
             "error": {"type": "RunNotFound", "message": f"workflow runtime run not found: {run_id}"},
         }
     paths = _workflow_paths(run_dir)
-    status = _read_json_file(paths["status"]) if paths["status"].is_file() else None
-    manifest = _read_json_file(paths["manifest"]) if paths["manifest"].is_file() else None
+    read_errors: list[dict[str, str]] = []
+    try:
+        status = _read_json_file(paths["status"]) if paths["status"].is_file() else None
+    except Exception as exc:
+        status = None
+        read_errors.append({"path": str(paths["status"]), "type": type(exc).__name__, "message": str(exc)})
+    try:
+        manifest = _read_json_file(paths["manifest"]) if paths["manifest"].is_file() else None
+    except Exception as exc:
+        manifest = None
+        read_errors.append({"path": str(paths["manifest"]), "type": type(exc).__name__, "message": str(exc)})
     report = paths["report"].read_text(encoding="utf-8") if paths["report"].is_file() else None
     return {
         "ok": True,
@@ -539,6 +558,7 @@ def read_workflow_runtime_run_status(project_root: str | Path | None, run_id: st
         "events": _read_workflow_events(run_dir, tail=tail),
         "manifest": manifest,
         "report": report,
+        "read_errors": read_errors,
     }
 
 
@@ -605,6 +625,343 @@ def record_workflow_runtime_client_event(payload: dict[str, Any]) -> dict[str, A
         "manifest": manifest,
         "events": _read_workflow_events(run_dir, tail=40),
     }
+
+
+def _local_comfy_api_base(payload: dict[str, Any]) -> str:
+    import os
+
+    text = str(
+        payload.get("local_comfy_api")
+        or payload.get("comfy_api_base")
+        or os.environ.get("REMOTE_WORKFLOW_LOCAL_API")
+        or "http://127.0.0.1:8188"
+    ).strip()
+    return text.rstrip("/") or "http://127.0.0.1:8188"
+
+
+def _post_local_comfy_json(api_base: str, endpoint: str, payload: dict[str, Any], timeout_sec: float = 30.0) -> dict[str, Any]:
+    import json
+    import urllib.request
+
+    request = urllib.request.Request(
+        f"{api_base}{endpoint}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=timeout_sec) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    return data if isinstance(data, dict) else {}
+
+
+def _get_local_comfy_json(api_base: str, endpoint: str, timeout_sec: float = 15.0) -> dict[str, Any]:
+    import json
+    import urllib.request
+
+    with urllib.request.urlopen(f"{api_base}{endpoint}", timeout=timeout_sec) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    return data if isinstance(data, dict) else {}
+
+
+def _find_remote_sampling_report(value: Any) -> str | None:
+    if isinstance(value, str):
+        if "Remote Sampling Report" in value or "remote_sampling_report" in value:
+            return value
+        return None
+    if isinstance(value, list):
+        for item in value:
+            found = _find_remote_sampling_report(item)
+            if found:
+                return found
+    if isinstance(value, dict):
+        for item in value.values():
+            found = _find_remote_sampling_report(item)
+            if found:
+                return found
+    return None
+
+
+def _report_line_value(report: str | None, key: str) -> str | None:
+    if not report:
+        return None
+    prefix = f"{key}:"
+    for line in report.splitlines():
+        if line.startswith(prefix):
+            return line[len(prefix) :].strip()
+    return None
+
+
+def _report_json_value(report: str | None, key: str) -> Any:
+    import json
+
+    value = _report_line_value(report, key)
+    if not value or not value.startswith("{"):
+        return None
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return {"decode_error": value}
+
+
+def _remote_sampling_report_details(report: str | None) -> dict[str, Any]:
+    return {
+        "job_id": _report_line_value(report, "job_id"),
+        "total_elapsed_sec": _report_line_value(report, "total_elapsed_sec"),
+        "upload": _report_json_value(report, "upload"),
+        "sampling": _report_json_value(report, "sampling"),
+        "download": _report_json_value(report, "download"),
+        "raw_report_present": bool(report),
+    }
+
+
+def _history_item_for_prompt(api_base: str, prompt_id: str) -> dict[str, Any] | None:
+    history = _get_local_comfy_json(api_base, f"/history/{prompt_id}")
+    item = history.get(prompt_id)
+    return item if isinstance(item, dict) else None
+
+
+def _history_has_execution_error(item: dict[str, Any] | None) -> bool:
+    if not item:
+        return False
+    status = item.get("status") if isinstance(item.get("status"), dict) else {}
+    for message in status.get("messages", []) or []:
+        if isinstance(message, (list, tuple)) and message and message[0] == "execution_error":
+            return True
+    return False
+
+
+def _backend_queue_worker(project_root: str | Path | None, run_id: str, api_base: str, timeout_sec: int) -> None:
+    project_path = Path(project_root) if project_root else DEFAULT_PROJECT_ROOT
+    run_dir = _run_dir_for(project_path, run_id)
+    prompt_id: str | None = None
+    try:
+        converted_prompt_path = run_dir / "converted_local_prompt.json"
+        if not converted_prompt_path.is_file():
+            raise FileNotFoundError(f"converted prompt not found: {converted_prompt_path}")
+        converted_prompt = _read_json_file(converted_prompt_path)
+        manifest = _copy_json_value(str(run_dir / "manifest.json")) or {"ok": True, "run_id": run_id, "run_dir": str(run_dir)}
+
+        status = _write_workflow_status(
+            run_dir,
+            run_id,
+            "queue",
+            "Backend watcher is submitting converted prompt to local ComfyUI.",
+            overall_percent=74,
+            extra={
+                "backend_watcher": {
+                    "enabled": True,
+                    "api_base": api_base,
+                    "timeout_sec": timeout_sec,
+                    "owner": "workflow_runtime_backend",
+                }
+            },
+        )
+        manifest.update(
+            {
+                "stage": "queue",
+                "queue_policy": "backend_submits_and_watches_converted_prompt",
+                "backend_watcher": status.get("backend_watcher"),
+            }
+        )
+        _update_manifest_observability(run_dir, manifest, status)
+
+        queued = _post_local_comfy_json(
+            api_base,
+            "/prompt",
+            {"prompt": converted_prompt, "client_id": f"remote-workflow-runtime-backend-{run_id}"},
+            timeout_sec=30,
+        )
+        prompt_id = str(queued.get("prompt_id") or "")
+        if not prompt_id:
+            raise RuntimeError(f"local ComfyUI /prompt response did not include prompt_id: {queued}")
+
+        status = _write_workflow_status(
+            run_dir,
+            run_id,
+            "sampling",
+            "Backend watcher queued prompt; waiting for ComfyUI history terminal state.",
+            overall_percent=78,
+            details={"prompt_id": prompt_id},
+            extra={
+                "prompt_id": prompt_id,
+                "backend_watcher": {
+                    "enabled": True,
+                    "api_base": api_base,
+                    "timeout_sec": timeout_sec,
+                    "owner": "workflow_runtime_backend",
+                },
+            },
+        )
+        manifest.update({"stage": "sampling", "prompt_id": prompt_id})
+        _update_manifest_observability(run_dir, manifest, status)
+
+        started = time.monotonic()
+        last_progress_event = 0.0
+        while time.monotonic() - started < timeout_sec:
+            item = _history_item_for_prompt(api_base, prompt_id)
+            if item:
+                if _history_has_execution_error(item):
+                    status_obj = item.get("status") if isinstance(item.get("status"), dict) else {}
+                    messages = status_obj.get("messages", [])
+                    status = _write_workflow_status(
+                        run_dir,
+                        run_id,
+                        "failed",
+                        "Converted prompt execution failed.",
+                        overall_percent=100,
+                        fatal=True,
+                        details={"prompt_id": prompt_id, "messages": messages},
+                    )
+                    manifest.update(
+                        {
+                            "ok": False,
+                            "stage": "failed",
+                            "prompt_id": prompt_id,
+                            "backend_observed_terminal": True,
+                            "error": {"type": "PromptExecutionFailed", "messages": messages},
+                        }
+                    )
+                    _update_manifest_observability(run_dir, manifest, status)
+                    return
+                item_status = item.get("status") if isinstance(item.get("status"), dict) else {}
+                if item_status.get("completed"):
+                    report = _find_remote_sampling_report(item)
+                    details = {
+                        "prompt_id": prompt_id,
+                        "remote_sampling_report": _remote_sampling_report_details(report),
+                    }
+                    status = _write_workflow_status(
+                        run_dir,
+                        run_id,
+                        "complete",
+                        "Guarded remote workflow run completed.",
+                        overall_percent=100,
+                        details=details,
+                        extra={
+                            "prompt_id": prompt_id,
+                            "backend_observed_terminal": True,
+                            "backend_elapsed_sec": round(time.monotonic() - started, 3),
+                        },
+                    )
+                    manifest.update(
+                        {
+                            "ok": True,
+                            "stage": "complete",
+                            "prompt_id": prompt_id,
+                            "backend_observed_terminal": True,
+                            "backend_elapsed_sec": status.get("backend_elapsed_sec"),
+                            "remote_sampling_report": details["remote_sampling_report"],
+                        }
+                    )
+                    _update_manifest_observability(run_dir, manifest, status)
+                    return
+            elapsed = time.monotonic() - started
+            if elapsed - last_progress_event >= 15.0 or last_progress_event == 0.0:
+                status = _write_workflow_status(
+                    run_dir,
+                    run_id,
+                    "sampling",
+                    "Backend watcher is polling ComfyUI history.",
+                    overall_percent=84,
+                    details={"prompt_id": prompt_id, "elapsed_sec": round(elapsed, 3)},
+                    extra={"prompt_id": prompt_id},
+                )
+                manifest.update({"stage": "sampling", "prompt_id": prompt_id})
+                _update_manifest_observability(run_dir, manifest, status)
+                last_progress_event = elapsed
+            time.sleep(1.0)
+
+        raise TimeoutError(f"timed out after {timeout_sec}s waiting for prompt {prompt_id}")
+    except Exception as error:
+        status = _write_workflow_status(
+            run_dir,
+            run_id,
+            "failed",
+            f"Backend watcher failed: {error}",
+            overall_percent=100,
+            fatal=True,
+            details={"prompt_id": prompt_id, "error_type": type(error).__name__, "error": str(error)},
+        )
+        manifest = _copy_json_value(str(run_dir / "manifest.json")) or {"run_id": run_id, "run_dir": str(run_dir)}
+        manifest.update(
+            {
+                "ok": False,
+                "stage": "failed",
+                "prompt_id": prompt_id,
+                "backend_observed_terminal": False,
+                "error": {"type": type(error).__name__, "message": str(error)},
+            }
+        )
+        _update_manifest_observability(run_dir, manifest, status)
+    finally:
+        with _BACKEND_WATCHER_LOCK:
+            _BACKEND_WATCHERS.pop(run_id, None)
+
+
+def start_workflow_runtime_backend_queue(payload: dict[str, Any]) -> dict[str, Any]:
+    project_root = project_root_from_payload(payload) if isinstance(payload, dict) else DEFAULT_PROJECT_ROOT
+    run_id = str(payload.get("run_id") or "")
+    if not run_id:
+        return {
+            "ok": False,
+            "stage": "failed",
+            "error": {"type": "InvalidPayload", "message": "run_id is required."},
+        }
+    run_dir = _run_dir_for(project_root, run_id)
+    paths = _workflow_paths(run_dir)
+    if not run_dir.is_dir():
+        return {
+            "ok": False,
+            "run_id": run_id,
+            "stage": "failed",
+            "error": {"type": "RunNotFound", "message": f"workflow runtime run not found: {run_id}"},
+        }
+    if paths["status"].is_file():
+        current = _read_json_file(paths["status"])
+        if current.get("stage") in {"complete", "failed"}:
+            return {"ok": True, "run_id": run_id, "already_terminal": True, "status": current}
+
+    api_base = _local_comfy_api_base(payload)
+    timeout_sec = int(payload.get("timeout_sec") or payload.get("timeout") or 2400)
+    timeout_sec = max(30, min(timeout_sec, 86400))
+    with _BACKEND_WATCHER_LOCK:
+        existing = _BACKEND_WATCHERS.get(run_id)
+        if existing and existing.is_alive():
+            status = _read_json_file(paths["status"]) if paths["status"].is_file() else None
+            return {"ok": True, "run_id": run_id, "watcher_started": False, "already_running": True, "status": status}
+        thread = threading.Thread(
+            target=_backend_queue_worker,
+            args=(project_root, run_id, api_base, timeout_sec),
+            name=f"remote-workflow-runtime-{run_id}",
+            daemon=True,
+        )
+        _BACKEND_WATCHERS[run_id] = thread
+    status = _write_workflow_status(
+        run_dir,
+        run_id,
+        "queue",
+        "Backend watcher thread started.",
+        overall_percent=73,
+        extra={
+            "backend_watcher": {
+                "enabled": True,
+                "api_base": api_base,
+                "timeout_sec": timeout_sec,
+                "thread": thread.name,
+            }
+        },
+    )
+    manifest = _copy_json_value(str(paths["manifest"])) or {"run_id": run_id, "run_dir": str(run_dir)}
+    manifest.update(
+        {
+            "stage": "queue",
+            "queue_policy": "backend_submits_and_watches_converted_prompt",
+            "backend_watcher": status.get("backend_watcher"),
+        }
+    )
+    _update_manifest_observability(run_dir, manifest, status)
+    thread.start()
+    return {"ok": True, "run_id": run_id, "watcher_started": True, "status": status}
 
 
 def _load_plan_for_run(payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1197,13 +1554,13 @@ def create_workflow_runtime_guarded_run(payload: dict[str, Any]) -> dict[str, An
         run_dir,
         str(converted["run_id"]),
         "queue",
-        "Guarded workflow runtime is ready to queue. Frontend will submit converted_prompt_object to ComfyUI.",
+        "Guarded workflow runtime is ready to queue. Backend watcher should submit converted_prompt_object to ComfyUI.",
         overall_percent=72,
         extra={
             "guards": {
-            "resources_ready": True,
-            "remote_environment_ready": True,
-            "converted_from_current_source": True,
+                "resources_ready": True,
+                "remote_environment_ready": True,
+                "converted_from_current_source": True,
             },
         },
     )
@@ -1213,7 +1570,7 @@ def create_workflow_runtime_guarded_run(payload: dict[str, Any]) -> dict[str, An
             "stage": "queue",
             "workflow_status": str(run_dir / "workflow_status.json"),
             "workflow_status_sha256": json_sha256(status),
-            "queue_policy": "frontend_submits_converted_prompt_after_backend_guards",
+            "queue_policy": "backend_submits_and_watches_converted_prompt",
         }
     )
     _update_manifest_observability(run_dir, manifest, status)

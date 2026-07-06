@@ -1,0 +1,9 @@
+Traceback (most recent call last):
+  File "F:\TieguoDun\Remote_comfyui\tools\sync_remote_custom_nodes.py", line 237, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "F:\TieguoDun\Remote_comfyui\tools\sync_remote_custom_nodes.py", line 188, in main
+    remote_path = ensure_remote_under(str(package.get("remote_path")), REMOTE_CUSTOM_NODES_ROOT, label=f"{package_name}.remote_path")
+  File "F:\TieguoDun\Remote_comfyui\tools\sync_remote_custom_nodes.py", line 112, in ensure_remote_under
+    raise ValueError(f"{label} escapes remote root: {clean_path} not under {clean_root}")
+ValueError: evil_pkg.remote_path escapes remote root: /tmp/evil_pkg not under /home/user02/remote_ComfyUI/ComfyUI/custom_nodes

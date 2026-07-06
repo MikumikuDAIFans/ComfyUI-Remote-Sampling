@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
 import shlex
 import subprocess
 import time
@@ -19,6 +20,12 @@ DEFAULT_SERVER_EXEC = Path(
         r"C:\Users\25454\.codex\skills\company-lab-2-server\scripts\server_exec.py",
     )
 )
+REMOTE_BASE = os.environ.get("REMOTE_SAMPLING_REMOTE_BASE", "/home/user02/remote_ComfyUI")
+REMOTE_CUSTOM_NODES_ROOT = os.environ.get(
+    "REMOTE_SAMPLING_REMOTE_CUSTOM_NODES_ROOT",
+    f"{REMOTE_BASE}/ComfyUI/custom_nodes",
+)
+REMOTE_TRANSFER_ROOT = os.environ.get("REMOTE_SAMPLING_REMOTE_TRANSFER_ROOT", f"{REMOTE_BASE}/transfer/custom_nodes")
 EXCLUDED_DIRS = {
     ".git",
     "__pycache__",
@@ -91,24 +98,64 @@ def upload_archive(project_root: Path, archive: Path, remote_archive: str) -> st
     return run_command(["python", str(uploader), f"{archive}={remote_archive}"], timeout=1800)
 
 
-def extract_remote(server_exec: Path, remote_archive: str, remote_path: str) -> str:
-    remote_parent = str(Path(remote_path).parent).replace("\\", "/")
-    remote_python = (
-        "import os,shutil,zipfile;"
-        f"archive={remote_archive!r};"
-        f"target={remote_path!r};"
-        f"parent={remote_parent!r};"
-        "os.makedirs(parent, exist_ok=True);"
-        "tmp=target+'.extracting';"
-        "shutil.rmtree(tmp, ignore_errors=True);"
-        "os.makedirs(tmp, exist_ok=True);"
-        "zipfile.ZipFile(archive).extractall(tmp);"
-        "shutil.rmtree(target, ignore_errors=True);"
-        "os.replace(tmp, target);"
-        "print('extracted '+target)"
-    )
+def normalize_remote_path(path: str) -> str:
+    text = str(path or "").replace("\\", "/").strip()
+    if not text.startswith("/"):
+        raise ValueError(f"remote path must be absolute: {path}")
+    return posixpath.normpath(text)
+
+
+def ensure_remote_under(path: str, root: str, *, label: str) -> str:
+    clean_path = normalize_remote_path(path)
+    clean_root = normalize_remote_path(root)
+    if clean_path != clean_root and not clean_path.startswith(clean_root.rstrip("/") + "/"):
+        raise ValueError(f"{label} escapes remote root: {clean_path} not under {clean_root}")
+    return clean_path
+
+
+def extract_remote(server_exec: Path, remote_archive: str, remote_path: str) -> tuple[str, str | None]:
+    remote_parent = posixpath.dirname(remote_path)
+    remote_python = f"""
+import json
+import os
+import shutil
+import time
+import zipfile
+
+archive = {remote_archive!r}
+target = {remote_path!r}
+parent = {remote_parent!r}
+backup = None
+
+os.makedirs(parent, exist_ok=True)
+tmp = target + ".extracting"
+shutil.rmtree(tmp, ignore_errors=True)
+os.makedirs(tmp, exist_ok=True)
+
+try:
+    zipfile.ZipFile(archive).extractall(tmp)
+    if os.path.exists(target):
+        backup = target + ".backup." + time.strftime("%Y%m%d_%H%M%S")
+        os.replace(target, backup)
+    os.replace(tmp, target)
+    print(json.dumps({{"ok": True, "target": target, "backup_path": backup}}, ensure_ascii=False))
+except Exception:
+    shutil.rmtree(tmp, ignore_errors=True)
+    if backup and os.path.exists(backup) and not os.path.exists(target):
+        os.replace(backup, target)
+    raise
+""".strip()
     command = "cd /home/user02/remote_ComfyUI && python3 -c " + shlex.quote(remote_python)
-    return run_command(["python", str(server_exec), "--cmd", command], timeout=600)
+    output = run_command(["python", str(server_exec), "--cmd", command], timeout=600)
+    backup_path = None
+    for line in output.splitlines():
+        if line.strip().startswith("{"):
+            try:
+                data = json.loads(line)
+                backup_path = data.get("backup_path")
+            except json.JSONDecodeError:
+                pass
+    return output, backup_path
 
 
 def packages_to_sync(plan: dict[str, Any], selected: set[str] | None) -> list[dict[str, Any]]:
@@ -126,6 +173,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--server-exec", type=Path, default=DEFAULT_SERVER_EXEC)
     parser.add_argument("--archive-dir", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--dry-run", action="store_true", help="Validate and report intended sync actions without uploading or replacing remote files.")
     return parser.parse_args()
 
 
@@ -137,31 +185,47 @@ def main() -> int:
     results = []
     for package in packages_to_sync(plan, selected):
         package_name = str(package.get("package_name"))
-        remote_path = str(package.get("remote_path"))
-        remote_archive = f"/home/user02/remote_ComfyUI/transfer/custom_nodes/{package_name}_{time.strftime('%Y%m%d_%H%M%S')}.zip"
+        remote_path = ensure_remote_under(str(package.get("remote_path")), REMOTE_CUSTOM_NODES_ROOT, label=f"{package_name}.remote_path")
+        remote_archive = ensure_remote_under(
+            f"{REMOTE_TRANSFER_ROOT}/{package_name}_{time.strftime('%Y%m%d_%H%M%S')}.zip",
+            REMOTE_TRANSFER_ROOT,
+            label=f"{package_name}.remote_archive",
+        )
         archive, file_count, bytes_total = make_archive(package, archive_dir)
-        upload_log = upload_archive(args.project_root, archive, remote_archive)
-        extract_log = extract_remote(args.server_exec, remote_archive, remote_path)
+        if args.dry_run:
+            upload_log = ""
+            extract_log = ""
+            backup_path = None
+            action = "dry_run"
+        else:
+            upload_log = upload_archive(args.project_root, archive, remote_archive)
+            extract_log, backup_path = extract_remote(args.server_exec, remote_archive, remote_path)
+            action = "synced"
         results.append(
             {
                 "package_name": package_name,
                 "local_path": package.get("local_path"),
                 "remote_path": remote_path,
+                "validated_remote_path": remote_path,
                 "archive": str(archive),
                 "remote_archive": remote_archive,
+                "backup_path": backup_path,
                 "file_count": file_count,
                 "bytes_total": bytes_total,
                 "upload_log_tail": upload_log[-2000:],
                 "extract_log_tail": extract_log[-2000:],
-                "action": "synced",
+                "action": action,
             }
         )
     report = {
         "schema_version": "custom-node-sync-report-v1",
         "synced_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "packages": results,
-        "summary": {"package_count": len(results), "synced": len(results)},
+        "summary": {"package_count": len(results), "synced": 0 if args.dry_run else len(results), "dry_run": bool(args.dry_run)},
         "fatal": False,
+        "dry_run": bool(args.dry_run),
+        "remote_custom_nodes_root": REMOTE_CUSTOM_NODES_ROOT,
+        "remote_transfer_root": REMOTE_TRANSFER_ROOT,
     }
     output = args.output or args.custom_nodes_plan.with_name("custom_nodes_sync_report.json")
     write_json(output, report)

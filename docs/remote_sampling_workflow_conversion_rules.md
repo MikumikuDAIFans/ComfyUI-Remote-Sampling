@@ -42,7 +42,20 @@
 
 - `Plan Current Workflow`：生成 workflow-level plan bundle，不排队。
 - `Convert`：生成本次专属 converted prompt 和 remote execution plan，不排队。
-- `Run Guarded`：从当前画布即时生成 API prompt，先创建 workflow-level plan 并轮询 `/remote_workflow/runtime/run_status`，再执行资源检查/同步、自定义节点检查/同步、依赖安装计划和远端 import smoke，之后转换、审计、生成 run bundle，并提交 converted prompt。
+- `Run Guarded`：从当前画布即时生成 API prompt，先创建 workflow-level plan 并轮询 `/remote_workflow/runtime/run_status`，再执行资源检查/同步、自定义节点检查/同步、依赖安装计划和远端 import smoke，之后转换、审计、生成 run bundle，并由后端 watcher 提交 converted prompt、轮询 `/history/<prompt_id>`、写回 complete/failed。
+
+面板 `Runtime Config` 必须参与正式请求：
+
+```text
+project_root
+python_executable
+local_comfy_api
+timeout_sec
+remote_executor
+remote_profile
+```
+
+`run_status` 请求必须携带 `project_root`，否则非默认项目根目录下的 run bundle 可能读错。
 
 workflow-level bundle 必须包含：
 
@@ -54,6 +67,12 @@ manifest.json
 ```
 
 `manifest.json` 应记录 workflow status、events 和 report 的路径与 hash，用于证明本次运行来自当前 source workflow，而不是旧 converted workflow 或旧 profile。
+
+queue 后状态写回规则：
+
+- 前端可以订阅状态，但不得作为唯一 completion writer。
+- 后端 watcher 必须负责 prompt queue、history polling、Remote Sampling Report 提取和 terminal status 写回。
+- 浏览器刷新或关闭后，`workflow_status.json` 仍应最终进入 `complete` 或 `failed`。
 
 `run_id` 复用必须严格绑定 source identity：
 

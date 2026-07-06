@@ -5,7 +5,7 @@
 - Plan ID: `remote-workflow-runtime-upgrade`
 - Version: `v2`
 - Created: `2026-07-04`
-- Last updated: `2026-07-05 13:18 +08:00`
+- Last updated: `2026-07-06 00:00 +08:00`
 - Project root: `F:\TieguoDun\Remote_comfyui`
 - Current branch: `main`
 - Canonical progress file: `F:\TieguoDun\Remote_comfyui\docs\remote_workflow_runtime_upgrade\01_remote_workflow_runtime_upgrade_task_book.md`
@@ -24,9 +24,11 @@
 | `00_preflight_governance/` | Gate checklist, change control, risk authorization, failure and completion templates | required |
 | `01_target_plans/` | Five acceptance-oriented target plans for the workflow-level product | required |
 | `02_long_task_books/00_phase_execution_matrix.md` | Compact Phase 0-9 task book index linked to the canonical progress ledger | required |
+| `02_long_task_books/post_review_hardening_task_book.md` | Follow-up hardening task book created from the comprehensive review findings | follow-up |
 | `04_phase_start_checklists/phase-start-checklists.md` | Phase start gates and failure handling rules | required |
 | `05_minimal_feasibility_probe/minimal-feasibility-probe-plan.md` | High-risk assumption probes before release claims | required |
 | `06_pre_start_readiness_review.md` | Construction readiness review and known boundaries | required |
+| `03_goal_prompt_post_review_hardening.md` | Copy-ready `/goal` prompt for the follow-up hardening wave | follow-up |
 
 ## Gate Index
 
@@ -62,3 +64,4 @@
 - Current execution state: v2 long-task system is executing under the active thread goal. v1 evidence remains baseline evidence, not v2 completion.
 - Construction planning state: normalized into a Full Mode lifecycle/construction plan on `2026-07-05`; the canonical task book remains the progress ledger.
 - Latest gate movement: all Phase 0-9 gates are `pass` or `pass-with-boundary` for the current supported workflow scope. Phase 9 final guarded smoke passed; final commit and remote head are verified by Git command output.
+- Follow-up planning state: post-review hardening task book and goal prompt added on `2026-07-06`; not yet approved for execution.

@@ -2,6 +2,15 @@ import { app } from "/scripts/app.js";
 import { api } from "/scripts/api.js";
 
 const PANEL_ID = "remote-workflow-runtime-controller";
+const CONFIG_KEY = "remoteWorkflowRuntime.config.v1";
+const DEFAULT_CONFIG = {
+  project_root: "F:\\TieguoDun\\Remote_comfyui",
+  python_executable: "C:\\Python314\\python.exe",
+  local_comfy_api: "http://127.0.0.1:8188",
+  timeout_sec: 2400,
+  remote_executor: "company_lab",
+  remote_profile: "auto",
+};
 
 window.__remoteWorkflowRuntimeControllerVersion = "20260705-workflow-status-events-v1";
 
@@ -67,6 +76,45 @@ function ensureStyle() {
       max-height: calc(58vh - 46px);
       overflow: auto;
       padding: 10px 12px 12px;
+    }
+    #${PANEL_ID} .rwr-config {
+      border: 1px solid #263244;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      padding: 8px;
+    }
+    #${PANEL_ID} .rwr-config summary {
+      color: #f8fafc;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    #${PANEL_ID} .rwr-config-grid {
+      display: grid;
+      gap: 7px;
+      margin-top: 8px;
+    }
+    #${PANEL_ID} .rwr-field {
+      display: grid;
+      gap: 3px;
+    }
+    #${PANEL_ID} .rwr-field label {
+      color: #94a3b8;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    #${PANEL_ID} .rwr-field input,
+    #${PANEL_ID} .rwr-field select {
+      background: #111827;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #e2e8f0;
+      min-width: 0;
+      padding: 6px 7px;
+    }
+    #${PANEL_ID} .rwr-config-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
     }
     #${PANEL_ID} .rwr-message {
       color: #aeb8c8;
@@ -143,8 +191,57 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function escapeAttr(value) {
+  return escapeHtml(value).replaceAll("'", "&#39;");
+}
+
+function loadRuntimeConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || "{}");
+    return { ...DEFAULT_CONFIG, ...(saved && typeof saved === "object" ? saved : {}) };
+  } catch {
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+function saveRuntimeConfig(config) {
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+}
+
+function configFromPanel(panel) {
+  const field = (name) => panel.querySelector(`[data-rwr-config="${name}"]`);
+  const timeout = Number(field("timeout_sec")?.value || DEFAULT_CONFIG.timeout_sec);
+  return {
+    project_root: field("project_root")?.value?.trim() || DEFAULT_CONFIG.project_root,
+    python_executable: field("python_executable")?.value?.trim() || DEFAULT_CONFIG.python_executable,
+    local_comfy_api: field("local_comfy_api")?.value?.trim() || DEFAULT_CONFIG.local_comfy_api,
+    timeout_sec: Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_CONFIG.timeout_sec,
+    remote_executor: field("remote_executor")?.value?.trim() || DEFAULT_CONFIG.remote_executor,
+    remote_profile: field("remote_profile")?.value?.trim() || DEFAULT_CONFIG.remote_profile,
+  };
+}
+
+function runtimePayload(panel, extra = {}) {
+  const config = configFromPanel(panel);
+  saveRuntimeConfig(config);
+  return {
+    ...extra,
+    project_root: config.project_root,
+    local_comfy_api: config.local_comfy_api,
+    timeout_sec: config.timeout_sec,
+    options: {
+      ...(extra.options || {}),
+      project_root: config.project_root,
+      python_executable: config.python_executable,
+      timeout_sec: config.timeout_sec,
+      remote_executor: config.remote_executor,
+      remote_profile: config.remote_profile,
+    },
+  };
+}
+
 function setMessage(panel, html, className = "") {
-  panel.querySelector(".rwr-body").innerHTML = `<div class="rwr-message ${className}">${html}</div>`;
+  panel.querySelector(".rwr-output").innerHTML = `<div class="rwr-message ${className}">${html}</div>`;
 }
 
 async function postJson(url, payload) {
@@ -267,7 +364,7 @@ function renderRuntimeStatus(panel, statusPayload, footerHtml = "") {
         })
         .join("")
     : `<div class="rwr-event">Waiting for workflow runtime events...</div>`;
-  panel.querySelector(".rwr-body").innerHTML = `
+  panel.querySelector(".rwr-output").innerHTML = `
     <div class="rwr-status-card">
       <div class="rwr-stage-line">
         <span class="rwr-stage">${escapeHtml(status.stage || manifest.stage || "preparing")}</span>
@@ -468,12 +565,18 @@ async function waitForQueuedPrompt(panel, converted, promptId) {
   throw new Error("Timed out waiting for queued guarded workflow prompt.");
 }
 
-function startStatusPolling(panel, runId) {
+function runStatusUrl(runId, projectRoot, tail = 20) {
+  const params = new URLSearchParams({ run_id: runId, tail: String(tail) });
+  if (projectRoot) params.set("project_root", projectRoot);
+  return `/remote_workflow/runtime/run_status?${params.toString()}`;
+}
+
+function startStatusPolling(panel, runId, projectRoot) {
   let stopped = false;
   const poll = async () => {
     if (stopped) return;
     try {
-      const status = await getJson(`/remote_workflow/runtime/run_status?run_id=${encodeURIComponent(runId)}&tail=20`);
+      const status = await getJson(runStatusUrl(runId, projectRoot, 20));
       renderRuntimeStatus(panel, status);
     } catch (error) {
       if (!stopped) {
@@ -490,11 +593,21 @@ function startStatusPolling(panel, runId) {
   };
 }
 
-async function queuePrompt(prompt) {
-  return postJson("/prompt", {
-    prompt,
-    client_id: api.clientId || crypto.randomUUID(),
-  });
+async function waitForBackendWorkflowRun(panel, runId, projectRoot) {
+  for (let attempt = 0; attempt < 2400; attempt += 1) {
+    const status = await getJson(runStatusUrl(runId, projectRoot, 20));
+    renderRuntimeStatus(panel, status);
+    const stage = status?.status?.stage;
+    if (stage === "complete") return status;
+    if (stage === "failed") {
+      const message = status?.status?.message || "Backend workflow runtime failed.";
+      const error = new Error(message);
+      error.payload = status;
+      throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error("Timed out waiting for backend workflow runtime watcher.");
 }
 
 async function currentWorkflowRequest(panel, endpoint, buttonSelector, workingMessage, doneMessage) {
@@ -504,7 +617,7 @@ async function currentWorkflowRequest(panel, endpoint, buttonSelector, workingMe
     setMessage(panel, "Building API prompt from current graph...");
     const { prompt, workflow } = await graphPrompt();
     setMessage(panel, workingMessage);
-    const plan = await postJson(endpoint, { prompt, workflow });
+    const plan = await postJson(endpoint, runtimePayload(panel, { prompt, workflow }));
     setMessage(panel, `${doneMessage}<pre>${escapeHtml(summarizePlan(plan))}</pre>`, "rwr-ok");
   } catch (error) {
     const detail = error.payload ? JSON.stringify(error.payload, null, 2) : error.stack || error.message;
@@ -541,21 +654,27 @@ async function runCurrentWorkflow(panel) {
   try {
     setMessage(panel, "Building API prompt from current graph...");
     const { prompt, workflow } = await graphPrompt();
+    const config = configFromPanel(panel);
+    saveRuntimeConfig(config);
     setMessage(panel, "Creating workflow runtime plan...");
-    const plan = await postJson("/remote_workflow/runtime/plan", { prompt, workflow });
-    stopPolling = startStatusPolling(panel, plan.run_id);
-    const converted = await postJson("/remote_workflow/runtime/run", { run_id: plan.run_id, prompt, workflow });
+    const plan = await postJson("/remote_workflow/runtime/plan", runtimePayload(panel, { prompt, workflow }));
+    stopPolling = startStatusPolling(panel, plan.run_id, config.project_root);
+    const converted = await postJson(
+      "/remote_workflow/runtime/run",
+      runtimePayload(panel, { run_id: plan.run_id, prompt, workflow }),
+    );
     if (!converted.converted_prompt_object) {
       throw new Error("Conversion did not return converted_prompt_object.");
     }
-    if (stopPolling) stopPolling();
     renderRuntimeStatus(
       panel,
       { status: converted.status, manifest: converted, events: [] },
       `<pre>${escapeHtml(summarizePlan(converted))}</pre>`,
     );
-    const queued = await queuePrompt(converted.converted_prompt_object);
-    await waitForQueuedPrompt(panel, converted, queued.prompt_id);
+    await postJson("/remote_workflow/runtime/queue_and_watch", runtimePayload(panel, {
+      run_id: converted.run_id,
+    }));
+    await waitForBackendWorkflowRun(panel, converted.run_id, config.project_root);
   } catch (error) {
     if (stopPolling) stopPolling();
     const detail = error.payload ? JSON.stringify(error.payload, null, 2) : error.stack || error.message;
@@ -570,6 +689,7 @@ function createPanel() {
   ensureStyle();
   let panel = document.getElementById(PANEL_ID);
   if (panel) return panel;
+  const config = loadRuntimeConfig();
   panel = document.createElement("div");
   panel.id = PANEL_ID;
   panel.innerHTML = `
@@ -583,13 +703,64 @@ function createPanel() {
       </div>
     </div>
     <div class="rwr-body">
-      <div class="rwr-message">Ready. Planning creates a workflow-level bundle without sampling or latent upload.</div>
+      <details class="rwr-config">
+        <summary>Runtime Config</summary>
+        <div class="rwr-config-grid">
+          <div class="rwr-field">
+            <label>project_root</label>
+            <input data-rwr-config="project_root" value="${escapeAttr(config.project_root)}" spellcheck="false" />
+          </div>
+          <div class="rwr-field">
+            <label>python_executable</label>
+            <input data-rwr-config="python_executable" value="${escapeAttr(config.python_executable)}" spellcheck="false" />
+          </div>
+          <div class="rwr-field">
+            <label>local_comfy_api</label>
+            <input data-rwr-config="local_comfy_api" value="${escapeAttr(config.local_comfy_api)}" spellcheck="false" />
+          </div>
+          <div class="rwr-field">
+            <label>timeout_sec</label>
+            <input data-rwr-config="timeout_sec" type="number" min="30" step="30" value="${escapeAttr(config.timeout_sec)}" />
+          </div>
+          <div class="rwr-field">
+            <label>remote_executor</label>
+            <select data-rwr-config="remote_executor">
+              <option value="company_lab"${config.remote_executor === "company_lab" ? " selected" : ""}>company_lab</option>
+              <option value="ssh"${config.remote_executor === "ssh" ? " selected" : ""}>ssh</option>
+            </select>
+          </div>
+          <div class="rwr-field">
+            <label>remote_profile</label>
+            <input data-rwr-config="remote_profile" value="${escapeAttr(config.remote_profile)}" spellcheck="false" />
+          </div>
+        </div>
+        <div class="rwr-config-actions">
+          <button class="rwr-save-config" type="button">Save</button>
+          <button class="rwr-reset-config" type="button">Reset</button>
+        </div>
+      </details>
+      <div class="rwr-output">
+        <div class="rwr-message">Ready. Planning creates a workflow-level bundle without sampling or latent upload.</div>
+      </div>
     </div>
   `;
   document.body.appendChild(panel);
   panel.querySelector(".rwr-toggle").addEventListener("click", () => {
     panel.classList.toggle("collapsed");
     panel.querySelector(".rwr-toggle").textContent = panel.classList.contains("collapsed") ? "Show" : "Hide";
+  });
+  panel.querySelector(".rwr-save-config").addEventListener("click", () => {
+    saveRuntimeConfig(configFromPanel(panel));
+    setMessage(panel, "Runtime config saved.", "rwr-ok");
+  });
+  panel.querySelector(".rwr-reset-config").addEventListener("click", () => {
+    localStorage.removeItem(CONFIG_KEY);
+    const defaults = loadRuntimeConfig();
+    for (const [key, value] of Object.entries(defaults)) {
+      const input = panel.querySelector(`[data-rwr-config="${key}"]`);
+      if (input) input.value = value;
+    }
+    setMessage(panel, "Runtime config reset.", "rwr-ok");
   });
   panel.querySelector(".rwr-plan").addEventListener("click", () => planCurrentWorkflow(panel));
   panel.querySelector(".rwr-convert").addEventListener("click", () => convertCurrentWorkflow(panel));

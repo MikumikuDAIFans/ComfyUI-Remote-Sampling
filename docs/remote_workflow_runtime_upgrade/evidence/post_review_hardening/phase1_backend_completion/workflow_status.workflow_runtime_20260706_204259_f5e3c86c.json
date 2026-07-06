@@ -1,0 +1,61 @@
+{
+  "schema_version": "workflow-runtime-status-v1",
+  "run_id": "workflow_runtime_20260706_204259_f5e3c86c",
+  "stage": "complete",
+  "message": "Guarded remote workflow run completed.",
+  "overall_percent": 100.0,
+  "fatal": false,
+  "updated_at": "2026-07-06 20:44:51",
+  "state_machine": [
+    "idle",
+    "local_preflight",
+    "analysis",
+    "resource_plan",
+    "sync",
+    "remote_env",
+    "convert",
+    "queue",
+    "sampling",
+    "download",
+    "decode",
+    "complete",
+    "failed"
+  ],
+  "details": {
+    "prompt_id": "b66c8791-49f7-4e01-ba6d-c88d43288c77",
+    "remote_sampling_report": {
+      "job_id": "remote_sampling_20260706_204331_9f1ed726_workflow_workflow_runtime_20260706_204259_f5e3c86c_500",
+      "total_elapsed_sec": "79.337",
+      "upload": {
+        "bytes": 233274,
+        "bytes_done": 233274,
+        "bytes_total": 233274,
+        "elapsed_sec": 9.392,
+        "mb": 0.222,
+        "mbps": 0.024,
+        "percent": 100.0
+      },
+      "sampling": {
+        "elapsed_sec": 3.045,
+        "eta_sec": 0.0,
+        "percent": 100.0,
+        "sec_per_step": 0.761,
+        "step": 4,
+        "steps": 4
+      },
+      "download": {
+        "bytes": 394786,
+        "bytes_done": 394786,
+        "bytes_total": 394786,
+        "elapsed_sec": 5.906,
+        "mb": 0.376,
+        "mbps": 0.064,
+        "percent": 100.0
+      },
+      "raw_report_present": true
+    }
+  },
+  "prompt_id": "b66c8791-49f7-4e01-ba6d-c88d43288c77",
+  "backend_observed_terminal": true,
+  "backend_elapsed_sec": 85.75
+}

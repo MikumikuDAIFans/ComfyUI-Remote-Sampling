@@ -14,7 +14,7 @@ The recommended user-facing entry is the local ComfyUI floating panel:
 
 - `Plan Current Workflow`: analyze the current graph, list model/LoRA/custom-node dependencies, and create an audit bundle without queueing.
 - `Convert`: generate a fresh per-run converted prompt and remote execution plan without queueing.
-- `Run Guarded`: create a fresh workflow runtime plan, poll `workflow_status.json` / `workflow_events.jsonl` while backend guards run, check/sync remote resources and custom nodes, run dependency planning and remote import smoke, perform runtime conversion, then queue the converted prompt.
+- `Run Guarded`: create a fresh workflow runtime plan, poll `workflow_status.json` / `workflow_events.jsonl` while backend guards run, check/sync remote resources and custom nodes, run dependency planning and remote import smoke, perform runtime conversion, then ask the backend watcher to queue and monitor the converted prompt.
 
 Do not use old converted workflow files as the formal entry point. The workflow-level path is designed to convert from the current source prompt for every run, preventing stale LoRA/profile contamination.
 
@@ -34,7 +34,8 @@ Local output nodes such as `VAEDecode` and `SaveImage` are allowed to remain in 
 - `tools/convert_ksampler_to_remote_sampling.py`: workflow converter that replaces `KSampler` nodes with `Remote_Sampling_local` and can generate remote profiles.
 - `tools/check_remote_resource_plan.py`: checks planned model resources on the remote server.
 - `tools/check_remote_custom_nodes_plan.py`: checks planned custom node packages on the remote server.
-- `tools/sync_remote_custom_nodes.py`: archives local custom node packages and extracts them under remote `ComfyUI/custom_nodes`.
+- `tools/sync_remote_custom_nodes.py`: archives local custom node packages and extracts them under remote `ComfyUI/custom_nodes` with path sandbox validation, dry-run reporting and backup-before-replace.
+- `tools/generic_ssh_exec.py`: generic OpenSSH command executor compatible with `REMOTE_SAMPLING_SERVER_EXEC` for public non-lab deployments.
 - `tools/sync_remote_resources.py`: uploads model/LoRA resources that are missing remotely.
 - `tools/install_remote_custom_node_dependencies.py`: builds or executes remote dependency install commands. Default mode is dry-run.
 - `tools/remote_custom_node_import_smoke.py`: starts remote ComfyUI when needed and checks `object_info` for required custom node classes.
@@ -55,7 +56,7 @@ Workflow-level runs also produce:
 - `workflow_events.jsonl`
 - `workflow_runtime_report.txt`
 
-The frontend reads `/remote_workflow/runtime/run_status?run_id=...` while `Run Guarded` is preparing a workflow, so users can see the current stage before the converted prompt is queued.
+The frontend reads `/remote_workflow/runtime/run_status?run_id=...&project_root=...` while `Run Guarded` is preparing and executing a workflow. The backend watcher owns prompt queueing and terminal state updates, so `workflow_status.json`, `workflow_events.jsonl` and `workflow_runtime_report.txt` still reach `complete` or `failed` if the browser is refreshed after queue submission.
 
 The local node keeps its first output as `LATENT` for workflow compatibility.
 
@@ -90,6 +91,7 @@ The workflow runtime is fail-closed by default:
 - remote custom node packages are checked/synced before queueing
 - custom node dependency commands are recorded; actual pip install requires explicit approval
 - remote ComfyUI import smoke must find required custom node classes in `object_info`
+- ambiguous custom node package discovery fails closed instead of silently choosing a package
 - fixed debug profiles such as `anima_qwen_aella_xcn` are refused unless explicitly allowed
 - remote RGB image nodes remain forbidden for remote sampling jobs
 - each workflow run writes a fresh bundle under `runs/workflow_runtime_<timestamp>_<id>`
@@ -106,6 +108,14 @@ Remote sampling on the default port `8197` is protected by a remote lock directo
 ```
 
 This prevents overlapping bridge jobs from reusing and killing the same temporary remote ComfyUI process mid-sampling.
+
+The managed remote ComfyUI service also writes an owner token under:
+
+```text
+/home/user02/remote_ComfyUI/locks/remote_comfy_service_8197.owner.json
+```
+
+`tools/remote_comfy_service.py stop` only stops an owned tmux session. It no longer uses broad `pkill` as a fallback.
 
 ## Usage
 
@@ -132,7 +142,10 @@ tools. The main configurable values are:
 ```text
 REMOTE_SAMPLING_PROJECT_ROOT       local project root used by the ComfyUI node
 REMOTE_SAMPLING_BRIDGE_PYTHON      Python executable used to launch the bridge CLI
-REMOTE_SAMPLING_SERVER_EXEC        SSH/tunnel helper script used by the lab tools
+REMOTE_SAMPLING_SERVER_EXEC        SSH/tunnel command executor; can be the lab helper or tools/generic_ssh_exec.py
+REMOTE_SAMPLING_SSH_TARGET         generic SSH target, for example user@example.com
+REMOTE_SAMPLING_SSH_PORT           generic SSH port
+REMOTE_SAMPLING_SSH_KEY            generic SSH private key path
 REMOTE_SAMPLING_REMOTE_BASE        remote project root, for example /home/user02/remote_ComfyUI
 REMOTE_SAMPLING_REMOTE_PYTHON      remote Python interpreter inside the ComfyUI venv
 REMOTE_SAMPLING_REMOTE_PORT        remote ComfyUI sampling service port, default 8197
@@ -141,10 +154,15 @@ REMOTE_SAMPLING_LOCAL_COMFY_ROOT   local ComfyUI root for decode/helper scripts
 REMOTE_SAMPLING_LOCAL_COMFY_MODELS local ComfyUI models directory for preflight hints
 REMOTE_SAMPLING_LOCAL_LORA_ROOT    local LoRA root used by the workflow converter
 REMOTE_SAMPLING_REMOTE_JOB_ROOT    remote job root used by Remote_Sampling_remote
+REMOTE_SAMPLING_SERVICE_OWNER      owner token for managed remote ComfyUI service
+REMOTE_SAMPLING_REMOTE_CUSTOM_NODES_ROOT path sandbox root for custom node sync
+REMOTE_SAMPLING_REMOTE_TRANSFER_ROOT path sandbox root for custom node archives
 ```
 
-The node UI also exposes `project_root`, `python_executable`,
-`remote_profile`, `timeout_sec` and `sampler_id`, so common local path changes
-can be made directly in ComfyUI without editing Python files.
+The workflow runtime panel exposes `Runtime Config` for `project_root`,
+`python_executable`, `local_comfy_api`, `timeout_sec`, `remote_executor` and
+`remote_profile`. The node UI also exposes node-level `project_root`,
+`python_executable`, `remote_profile`, `timeout_sec` and `sampler_id`, so common
+path changes can be made directly in ComfyUI without editing Python files.
 
 This repository intentionally excludes runtime jobs, latent files, model archives, generated images, local logs and credentials via `.gitignore`.

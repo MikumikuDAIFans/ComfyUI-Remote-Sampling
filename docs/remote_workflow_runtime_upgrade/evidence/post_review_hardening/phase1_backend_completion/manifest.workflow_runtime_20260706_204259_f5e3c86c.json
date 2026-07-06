@@ -1,0 +1,129 @@
+{
+  "ok": true,
+  "run_id": "workflow_runtime_20260706_204259_f5e3c86c",
+  "run_dir": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c",
+  "created_at": "2026-07-06 20:42:59",
+  "workflow_runtime_version": "workflow-runtime-v1",
+  "policy_version": "workflow-fail-closed-v1",
+  "source_prompt": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\source_prompt.json",
+  "source_prompt_sha256": "f7ed34e527a8b2b1077e30ca4965cf515d7cbde35b5642d0dca7a16d56c2feb2",
+  "source_workflow": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\source_workflow.json",
+  "source_workflow_sha256": "aaaebf44c71c09cf7b81a70c76e75c7bd4c05f61b7866a2cc68d47d8eaf5c5f8",
+  "workflow_analysis": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\workflow_analysis.json",
+  "workflow_analysis_sha256": "3309dabd0861be85600b91251c087489039f797198d3a8cdb170e9d9db345824",
+  "resources_plan": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\resources_plan.json",
+  "resources_plan_sha256": "a39649b6c7e2a7bb6b5df35bf501e6542484bea20e7bc75f2ab64b5b4d397113",
+  "custom_nodes_plan": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\custom_nodes_plan.json",
+  "custom_nodes_plan_sha256": "7668f905a6158c0d59fe17eba211d1a46a2293263a8f34f6cab8dbe08f850987",
+  "workflow_status": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\workflow_status.json",
+  "stage": "complete",
+  "next_required_phase": "Phase 6: Sync Engine, Progress UI And Failure Recovery",
+  "analysis_summary": {
+    "node_count": 9,
+    "sampler_count": 1,
+    "custom_node_class_count": 0,
+    "custom_node_package_count": 0,
+    "local_custom_node_package_missing_count": 0,
+    "resource_count": 3,
+    "local_missing_resource_count": 0,
+    "fatal": false
+  },
+  "errors": [],
+  "warnings": [
+    "Resource plan mirrors local ComfyUI/models relative paths. Remote existence/hash diff is checked by Phase 3 remote integration.",
+    "Workflow-level conversion is generated per run from the current source prompt. Remote queue submission is not executed by this route."
+  ],
+  "workflow_status_sha256": "f68c2e9d24528af17d326ed45a452acd00b5430fa461f87b6ece63f7872337fa",
+  "workflow_events": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\workflow_events.jsonl",
+  "workflow_events_sha256": "da9464c48cc40fa424bb56d155b5ffc106a3f2db49b60475ff4bba7bc4faf85c",
+  "workflow_report": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\workflow_runtime_report.txt",
+  "workflow_report_sha256": "477ff226638e9112ecdc5979fcf1ee4cb857aaf7e71982812aa38fab11b18ea1",
+  "resources_diff": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\resources_diff.json",
+  "resources_diff_sha256": "4f7b26badc4916ca76dac9433672f8a876a80724f85bedc41e67400180522ff0",
+  "resources_sync_report": null,
+  "resources_sync_report_sha256": null,
+  "resources_ready": true,
+  "remote_environment_report": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\remote_environment_report.json",
+  "remote_environment_report_sha256": "0b931602f3555a7d16336d98320ed69f69222ac5a10a38d50f45d3324aabf2a5",
+  "custom_nodes_sync_report": null,
+  "custom_nodes_sync_report_sha256": null,
+  "remote_custom_node_dependency_install": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\remote_custom_node_dependency_install.json",
+  "remote_custom_node_dependency_install_sha256": "9f6d1dadbda304bdc5cb86d566a8a52334873a761e0225080f79b13315e7b959",
+  "remote_custom_node_import_smoke": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\remote_custom_node_import_smoke.json",
+  "remote_custom_node_import_smoke_sha256": "042f6760dcad03b2cfee9f3fdac96840c7a5269f03773eb4da7ff8a71b543fcc",
+  "remote_environment_ready": true,
+  "converted_local_prompt": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\converted_local_prompt.json",
+  "converted_local_prompt_sha256": "b8bdfbf67963c277bbaaf6ea478e1f2d74f25db0440688550b82b41e3a9ed9ca",
+  "remote_execution_plan": "F:\\TieguoDun\\Remote_comfyui\\runs\\workflow_runtime_20260706_204259_f5e3c86c\\remote_execution_plan.json",
+  "remote_execution_plan_sha256": "5ffd039cbbe6a580ecd0f2d6332322f2343b3a4ff0971ede04ee5327ff491dc0",
+  "remote_prompt_privacy": {
+    "class_list": [
+      "UNETLoader",
+      "CLIPLoader",
+      "Remote_Sampling_remote"
+    ],
+    "forbidden_image_nodes": [],
+    "forbidden_image_node_count": 0,
+    "profiles": [
+      {
+        "node": "500",
+        "snapshot_profile": "F:\\TieguoDun\\Remote_comfyui\\runs\\runtime_20260706_204325_02febfe7\\profiles\\500_auto_converted_prompt_500.json",
+        "class_list": [
+          "UNETLoader",
+          "CLIPLoader",
+          "Remote_Sampling_remote"
+        ],
+        "forbidden_image_nodes": [],
+        "forbidden_image_node_count": 0
+      }
+    ],
+    "remote_rgb_image_nodes_forbidden": true,
+    "privacy_scope": "remote_profile_prompt_reconstruction"
+  },
+  "remote_prompt_forbidden_image_node_count": 0,
+  "runtime_conversion_run_id": "runtime_20260706_204325_02febfe7",
+  "runtime_conversion_run_dir": "F:\\TieguoDun\\Remote_comfyui\\runs\\runtime_20260706_204325_02febfe7",
+  "runtime_conversion_manifest": "F:\\TieguoDun\\Remote_comfyui\\runs\\runtime_20260706_204325_02febfe7\\manifest.json",
+  "runtime_conversion_manifest_sha256": "7fd2dd3f8ae342910846243d54bf3767e48d51319141ba0899a12475369899ee",
+  "queue_policy": "backend_submits_and_watches_converted_prompt",
+  "backend_watcher": {
+    "enabled": true,
+    "api_base": "http://127.0.0.1:8188",
+    "timeout_sec": 2400,
+    "owner": "workflow_runtime_backend"
+  },
+  "prompt_id": "b66c8791-49f7-4e01-ba6d-c88d43288c77",
+  "backend_observed_terminal": true,
+  "backend_elapsed_sec": 85.75,
+  "remote_sampling_report": {
+    "job_id": "remote_sampling_20260706_204331_9f1ed726_workflow_workflow_runtime_20260706_204259_f5e3c86c_500",
+    "total_elapsed_sec": "79.337",
+    "upload": {
+      "bytes": 233274,
+      "bytes_done": 233274,
+      "bytes_total": 233274,
+      "elapsed_sec": 9.392,
+      "mb": 0.222,
+      "mbps": 0.024,
+      "percent": 100.0
+    },
+    "sampling": {
+      "elapsed_sec": 3.045,
+      "eta_sec": 0.0,
+      "percent": 100.0,
+      "sec_per_step": 0.761,
+      "step": 4,
+      "steps": 4
+    },
+    "download": {
+      "bytes": 394786,
+      "bytes_done": 394786,
+      "bytes_total": 394786,
+      "elapsed_sec": 5.906,
+      "mb": 0.376,
+      "mbps": 0.064,
+      "percent": 100.0
+    },
+    "raw_report_present": true
+  }
+}

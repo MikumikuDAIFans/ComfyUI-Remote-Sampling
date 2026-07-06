@@ -1,0 +1,29 @@
+{
+  "schema_version": "custom-node-sync-report-v1",
+  "synced_at": "2026-07-06 20:58:01",
+  "packages": [
+    {
+      "package_name": "safe_pkg",
+      "local_path": "F:\\TieguoDun\\Remote_comfyui\\docs\\remote_workflow_runtime_upgrade\\evidence\\post_review_hardening\\phase3_remote_safety\\dummy_pkg",
+      "remote_path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/safe_pkg",
+      "validated_remote_path": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes/safe_pkg",
+      "archive": "F:\\TieguoDun\\Remote_comfyui\\transfer\\custom_nodes\\safe_pkg_20260706_205801.zip",
+      "remote_archive": "/home/user02/remote_ComfyUI/transfer/custom_nodes/safe_pkg_20260706_205801.zip",
+      "backup_path": null,
+      "file_count": 1,
+      "bytes_total": 9,
+      "upload_log_tail": "",
+      "extract_log_tail": "",
+      "action": "dry_run"
+    }
+  ],
+  "summary": {
+    "package_count": 1,
+    "synced": 0,
+    "dry_run": true
+  },
+  "fatal": false,
+  "dry_run": true,
+  "remote_custom_nodes_root": "/home/user02/remote_ComfyUI/ComfyUI/custom_nodes",
+  "remote_transfer_root": "/home/user02/remote_ComfyUI/transfer/custom_nodes"
+}
