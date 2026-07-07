@@ -76,7 +76,9 @@ def main() -> int:
     selected = {"upload_required"}
     if args.include_size_mismatch:
         selected.add("size_mismatch")
-    uploader = args.project_root / "tools" / "upload_to_company_server.py"
+    stream_uploader = args.project_root / "tools" / "upload_to_company_server_stream.py"
+    sftp_uploader = args.project_root / "tools" / "upload_to_company_server.py"
+    uploader = stream_uploader if stream_uploader.is_file() else sftp_uploader
     if not uploader.is_file():
         raise FileNotFoundError(uploader)
 
@@ -95,6 +97,7 @@ def main() -> int:
                 "remote_path": remote_path,
                 "bytes": local_path.stat().st_size,
                 "action": "uploaded",
+                "uploader": str(uploader),
                 "upload_log_tail": output[-2000:],
             }
         )

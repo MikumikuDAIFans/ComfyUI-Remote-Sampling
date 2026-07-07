@@ -35,9 +35,8 @@ Remote_Sampling_local
 
 可用按钮：
 
-- `Plan Current Workflow`：只分析当前画布，生成 `workflow_analysis.json`、`resources_plan.json`、`custom_nodes_plan.json`，不排队。
-- `Convert`：从当前画布重新生成本次专属 `converted_local_prompt.json` 和 `remote_execution_plan.json`，不排队。
-- `Run Guarded`：先创建 workflow-level plan 并显示准备阶段进度；随后执行远端资源检查/同步、自定义节点检查/同步、依赖安装计划、远端 `object_info` import smoke，再从当前画布重新转换；全部通过后由后端 watcher 把 converted prompt 提交到 ComfyUI 队列并轮询 `/history` 写回终态。
+- `Check & Sync`：分析当前画布，并执行远端资源检查/同步、自定义节点检查/同步、依赖安装计划和远端 `object_info` import smoke。该按钮只让远端环境进入可运行状态，不提交 ComfyUI 队列。
+- `Convert Canvas`：从当前画布重新生成本次专属 `converted_local_prompt.json` 和 `remote_execution_plan.json`，然后把画布中的 `KSampler` 节点替换为 `Remote_Sampling_local`。转换完成后，使用 ComfyUI 自带 Queue/Run 按钮出图。
 
 面板内的 `Runtime Config` 可配置并持久化：
 
@@ -50,9 +49,9 @@ remote_executor
 remote_profile
 ```
 
-旧的 `Remote Sampling` 面板 `Run Current Workflow` 仍保留为兼容入口，但后续正式能力会优先落在 `Remote Workflow Runtime`。
+旧的 `Remote Sampling` 兼容面板默认隐藏。正式入口是 `Remote Workflow Runtime` 的 `Check & Sync` / `Convert Canvas`，再配合 ComfyUI 原生 Queue/Run。
 
-5. `Run Guarded` 每次运行都会生成新的 workflow-level run bundle：
+5. `Check & Sync` 和 `Convert Canvas` 每次执行都会生成新的 workflow-level run bundle：
 
 ```text
 F:\TieguoDun\Remote_comfyui\runs\workflow_runtime_<timestamp>_<id>
@@ -78,20 +77,20 @@ workflow_runtime_report.txt
 manifest.json
 ```
 
-`Run Guarded` 前端会轮询：
+`Check & Sync` / `Convert Canvas` 前端会轮询：
 
 ```text
 /remote_workflow/runtime/run_status?run_id=<workflow_runtime_run_id>&project_root=<project_root>
 ```
 
-因此资源检查、资源同步、自定义节点同步、依赖计划、import smoke、转换、queue、sampling 和 complete/failed 等阶段可以在面板中实时或准实时看到。queue 后终态由后端 watcher 写入，即使浏览器刷新或关闭，run bundle 仍应最终进入 `complete` 或 `failed`。
+因此资源检查、资源同步、自定义节点同步、依赖计划、import smoke 和转换阶段可以在面板中实时或准实时看到。转换成功后，采样由 ComfyUI 原生 Queue/Run 触发，采样进度显示在 `Remote_Sampling_local` 节点内面板和 job 审计文件中。
 
 `run_id` 复用规则：
 
-- `Run Guarded` 会把本次 plan 绑定到当前 source prompt/workflow hash。
+- `Check & Sync` / `Convert Canvas` 会把本次 plan 绑定到当前 source prompt/workflow hash。
 - 如果脚本或前端复用旧 `run_id`，但又传入不同的当前 workflow/prompt，后端会在 `local_preflight` 以 `SourcePromptHashMismatch` 或 `SourceWorkflowHashMismatch` 失败。
 - 这类失败发生在远端资源检查、workflow conversion、latent 上传和远端采样之前。
-- 当前画布发生实质变化后，应重新执行 `Plan Current Workflow` 或直接重新 `Run Guarded`，不要复用旧 run bundle。
+- 当前画布发生实质变化后，应重新执行 `Check & Sync` 或直接重新 `Convert Canvas`，不要复用旧 run bundle。
 
 随后底层 remote sampling node 仍会生成 job bundle：
 
@@ -105,7 +104,7 @@ F:\TieguoDun\Remote_comfyui\jobs\remote_sampling_<timestamp>_<id>_<sampler_id>
 
 - 默认只生成 `remote_custom_node_dependency_install.json`，不会自动联网 `pip install`。
 - 如确实需要执行依赖安装，必须由操作者明确允许，例如在后端 payload 中设置 `allow_remote_dependency_install: true`，或手动运行 `tools/install_remote_custom_node_dependencies.py --execute`。
-- 如果依赖未安装导致远端 `object_info` 缺少节点 class，`Run Guarded` 会在上传 latent 前失败。
+- 如果依赖未安装导致远端 `object_info` 缺少节点 class，`Check & Sync` / `Convert Canvas` 会在上传 latent 前失败。
 
 兼容入口会从当前画布生成 API prompt，调用本地 `/remote_sampling/convert`，即时转换并审计，然后把 converted prompt 提交到 ComfyUI 队列。每次运行都会生成旧格式 run bundle：
 
@@ -168,7 +167,7 @@ $env:REMOTE_SAMPLING_SSH_TARGET="user@example.com"
 ```
 
 ### 转换已有 API workflow
-日常优先使用前端 `Run Current Workflow`。下面的 CLI 仍保留给调试、批处理和回归验证。
+日常优先使用前端 `Convert Canvas`，然后点击 ComfyUI 自带 Queue/Run。下面的 CLI 仍保留给调试、批处理和回归验证。
 
 基础转换：
 

@@ -285,8 +285,11 @@ def workflow_runtime_status() -> dict[str, Any]:
         "state_machine": STATE_MACHINE,
         "capabilities": {
             "plan_current_workflow": True,
-            "run_current_workflow": "guarded_prepare_then_backend_queue",
-            "resource_sync": "upload_required_resources_before_queue",
+            "run_current_workflow": "deprecated_hidden_compatibility_entry",
+            "check_and_sync": "guarded_prepare_without_queue",
+            "convert_canvas": "guarded_prepare_then_frontend_canvas_rewrite",
+            "native_queue_after_convert": True,
+            "resource_sync": "upload_required_resources_before_canvas_conversion",
             "custom_node_sync": "archive_tool_available",
             "runtime_conversion_backend": CONVERTER_VERSION,
             "runtime_conversion_policy": POLICY_VERSION,
@@ -303,6 +306,36 @@ def workflow_runtime_status() -> dict[str, Any]:
             },
         },
     }
+
+
+SAMPLER_PARITY_RISK_NAMES = {
+    "seeds_2",
+    "seeds_3",
+    "er_sde",
+    "gradient_estimation",
+    "gradient_estimation_cfg_pp",
+    "sa_solver",
+    "sa_solver_pece",
+}
+
+
+def sampler_parity_warnings(analysis: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    for sampler in analysis.get("samplers", []):
+        if not isinstance(sampler, dict):
+            continue
+        sampler_name = str(sampler.get("sampler_name") or "")
+        scheduler = str(sampler.get("scheduler") or "")
+        if sampler_name in SAMPLER_PARITY_RISK_NAMES:
+            node_id = sampler.get("node_id", "?")
+            warnings.append(
+                "Sampler parity warning: node "
+                f"{node_id} uses {sampler_name}/{scheduler}. This sampler can be more sensitive to "
+                "ComfyUI version, platform, and implementation differences. For local/remote equivalence "
+                "validation, first test the same workflow with euler/normal; keep this sampler only after "
+                "the visual result is accepted."
+            )
+    return warnings
 
 
 def create_workflow_runtime_plan(payload: dict[str, Any]) -> dict[str, Any]:
@@ -391,6 +424,10 @@ def create_workflow_runtime_plan(payload: dict[str, Any]) -> dict[str, Any]:
             "custom_node_package_count": custom_nodes_plan["summary"]["package_count"],
         },
     )
+    warnings = [
+        "Resource plan mirrors local ComfyUI/models relative paths. Remote existence/hash diff is checked by Phase 3 remote integration.",
+    ]
+    warnings.extend(sampler_parity_warnings(analysis))
     manifest = {
         "ok": not status["fatal"],
         "run_id": run_id,
@@ -424,9 +461,7 @@ def create_workflow_runtime_plan(payload: dict[str, Any]) -> dict[str, Any]:
         "errors": (analysis.get("issues", []) if analysis.get("fatal") else [])
         + resources_plan.get("errors", [])
         + custom_nodes_plan.get("errors", []),
-        "warnings": [
-            "Resource plan mirrors local ComfyUI/models relative paths. Remote existence/hash diff is checked by Phase 3 remote integration.",
-        ],
+        "warnings": warnings,
     }
     _update_manifest_observability(run_dir, manifest, status)
     return {

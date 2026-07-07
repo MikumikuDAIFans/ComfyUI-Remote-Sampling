@@ -9,6 +9,7 @@
 /outputs/
 /tmp/
 /temp/
+/ComfyUI-Remote-Sampling/profiles/generated/
 
 # Python cache and local environments
 __pycache__/

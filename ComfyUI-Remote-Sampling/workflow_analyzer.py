@@ -20,6 +20,7 @@ UNET_LOADER_CLASSES = {"UNETLoader"}
 CLIP_LOADER_CLASSES = {"CLIPLoader"}
 VAE_LOADER_CLASSES = {"VAELoader"}
 LORA_LOADER_CLASSES = {"LoraLoader", "Lora Loader (LoraManager)"}
+MODEL_PATCH_CLASSES = {"ModelSamplingAuraFlow"}
 IMAGE_IO_CLASSES = {"LoadImage", "PreviewImage", "SaveImage"}
 REMOTE_FORBIDDEN_CLASSES = {"LoadImage", "VAEEncode", "VAELoader", "VAEDecode", "PreviewImage", "SaveImage"}
 
@@ -32,6 +33,7 @@ COMMON_COMFY_CLASSES = {
     "KSampler",
     "LoadImage",
     "LoraLoader",
+    "ModelSamplingAuraFlow",
     "PreviewImage",
     "Remote_Sampling_local",
     "Remote_Sampling_remote",
@@ -189,6 +191,19 @@ def trace_model_chain(
         for item in loras_from_lora_manager(node, models_root):
             item["node_id"] = node_id
             loras.append(item)
+        return unet, loras, issues
+    if cls in MODEL_PATCH_CLASSES:
+        unet, loras, issues = trace_model_chain(prompt, inputs.get("model"), models_root, seen=seen)
+        if unet is not None:
+            patches = unet.setdefault("model_patches", [])
+            patch_inputs = {key: value for key, value in inputs.items() if key != "model"}
+            patches.append(
+                {
+                    "node_id": node_id,
+                    "class_type": cls,
+                    "inputs": patch_inputs,
+                }
+            )
         return unet, loras, issues
     return None, [], [{"type": "UnsupportedModelChainNode", "message": f"Unsupported model chain node {node_id}: {cls}", "fatal": True, "node_id": node_id, "class_type": cls}]
 

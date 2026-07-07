@@ -33,6 +33,9 @@ LORA_LOADER_TYPES = {
     "LoraLoader",
     "Lora Loader (LoraManager)",
 }
+MODEL_PATCH_TYPES = {
+    "ModelSamplingAuraFlow",
+}
 CLIP_LOADER_TYPES = {
     "CLIPLoader",
 }
@@ -270,6 +273,16 @@ def model_chain_profile(
     if class_type == "Lora Loader (LoraManager)":
         unet, loras = model_chain_profile(prompt, inputs.get("model"), lora_root, seen)
         loras.extend(loras_from_lora_manager(node, lora_root))
+        return unet, loras
+    if class_type in MODEL_PATCH_TYPES:
+        unet, loras = model_chain_profile(prompt, inputs.get("model"), lora_root, seen)
+        patch_inputs = {key: value for key, value in inputs.items() if key != "model"}
+        unet.setdefault("model_patches", []).append(
+            {
+                "class_type": class_type,
+                "inputs": patch_inputs,
+            }
+        )
         return unet, loras
     raise ValueError(f"unsupported model chain node {node_id}: {class_type}")
 

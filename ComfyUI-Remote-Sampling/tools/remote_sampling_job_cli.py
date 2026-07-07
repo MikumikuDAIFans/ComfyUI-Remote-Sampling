@@ -13,7 +13,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import paramiko
 
@@ -166,6 +166,35 @@ def mkdir_p(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
             sftp.mkdir(current)
 
 
+RETRYABLE_SFTP_ERRORS = (EOFError, OSError, paramiko.SSHException)
+
+
+def sftp_file_size(sftp: paramiko.SFTPClient, remote: str) -> int | None:
+    try:
+        return int(sftp.stat(remote).st_size)
+    except FileNotFoundError:
+        return None
+
+
+def sftp_remove_if_exists(sftp: paramiko.SFTPClient, remote: str) -> None:
+    try:
+        sftp.remove(remote)
+    except FileNotFoundError:
+        pass
+
+
+def finalize_uploaded_file(sftp: paramiko.SFTPClient, local: Path, remote: str) -> bool:
+    expected = local.stat().st_size
+    if sftp_file_size(sftp, remote) == expected:
+        return True
+    tmp = remote + ".uploading"
+    if sftp_file_size(sftp, tmp) == expected:
+        sftp_remove_if_exists(sftp, remote)
+        sftp.rename(tmp, remote)
+        return True
+    return False
+
+
 class TransferMeter:
     def __init__(self, *, job_dir: Path, stage: str, label: str, start_percent: float, end_percent: float):
         self.job_dir = job_dir
@@ -209,11 +238,14 @@ def upload_file(
     meter: TransferMeter | None = None,
 ) -> dict[str, Any] | None:
     mkdir_p(sftp, posixpath.dirname(remote))
+    if finalize_uploaded_file(sftp, local, remote):
+        if meter is not None:
+            total = local.stat().st_size
+            meter.update(total, total, force=True)
+            return meter.last_metrics
+        return None
     tmp = remote + ".uploading"
-    try:
-        sftp.remove(tmp)
-    except FileNotFoundError:
-        pass
+    sftp_remove_if_exists(sftp, tmp)
     if meter is not None:
         total = local.stat().st_size
 
@@ -224,10 +256,7 @@ def upload_file(
         meter.update(total, total, force=True)
     else:
         sftp.put(str(local), tmp)
-    try:
-        sftp.remove(remote)
-    except FileNotFoundError:
-        pass
+    sftp_remove_if_exists(sftp, remote)
     sftp.rename(tmp, remote)
     return meter.last_metrics if meter is not None else None
 
@@ -447,6 +476,7 @@ def profile_summary(profile: str, config: dict[str, Any], path: Path) -> dict[st
         "unet": {
             "unet_name": unet.get("unet_name"),
             "weight_dtype": unet.get("weight_dtype", "default"),
+            "model_patches": unet.get("model_patches", []),
         },
         "clip": {
             "clip_name": clip.get("clip_name"),
@@ -647,6 +677,21 @@ def build_profile_prompt(profile: str, job_id: str, config: dict[str, Any] | Non
 
     model_ref: list[Any] = ["44", 0]
     clip_ref: list[Any] = ["45", 0]
+    for index, patch in enumerate(unet.get("model_patches", [])):
+        if not isinstance(patch, dict):
+            raise TypeError(f"profile {profile} unet.model_patches[{index}] must be an object")
+        node_id = str(120 + index)
+        patch_inputs = patch.get("inputs", {})
+        if not isinstance(patch_inputs, dict):
+            raise TypeError(f"profile {profile} unet.model_patches[{index}].inputs must be an object")
+        prompt[node_id] = {
+            "class_type": patch.get("class_type", "ModelSamplingAuraFlow"),
+            "inputs": {
+                **patch_inputs,
+                "model": model_ref,
+            },
+        }
+        model_ref = [node_id, 0]
     for index, lora in enumerate(config.get("loras", [])):
         if not isinstance(lora, dict):
             raise TypeError(f"profile {profile} loras[{index}] must be an object")
@@ -877,24 +922,82 @@ def main() -> int:
             print(err, file=sys.stderr, end="")
             return tunnel.returncode or 1
         wait_local_port(ssh_port)
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(
-            "127.0.0.1",
-            port=ssh_port,
-            username=server_exec.SERVER_USER,
-            password=os.environ.get("DGX_SERVER_PASSWORD") or server_exec.SERVER_PASSWORD,
-            timeout=15,
-            banner_timeout=15,
-            auth_timeout=15,
-            look_for_keys=False,
-            allow_agent=False,
-        )
-        transport = client.get_transport()
-        if transport is None:
-            raise RuntimeError("SSH transport was not established")
-        transport.set_keepalive(30)
-        sftp = paramiko.SFTPClient.from_transport(transport, window_size=128 * 1024 * 1024, max_packet_size=16 * 1024 * 1024)
+
+        def reconnect_ssh() -> None:
+            nonlocal client, sftp
+            if sftp is not None:
+                try:
+                    sftp.close()
+                except Exception:
+                    pass
+                sftp = None
+            if client is not None:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+                client = None
+            last_error: BaseException | None = None
+            for attempt in range(1, 5):
+                try:
+                    fresh = paramiko.SSHClient()
+                    fresh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                    fresh.connect(
+                        "127.0.0.1",
+                        port=ssh_port,
+                        username=server_exec.SERVER_USER,
+                        password=os.environ.get("DGX_SERVER_PASSWORD") or server_exec.SERVER_PASSWORD,
+                        timeout=30,
+                        banner_timeout=45,
+                        auth_timeout=30,
+                        look_for_keys=False,
+                        allow_agent=False,
+                    )
+                    transport = fresh.get_transport()
+                    if transport is None:
+                        raise RuntimeError("SSH transport was not established")
+                    transport.set_keepalive(15)
+                    client = fresh
+                    sftp = paramiko.SFTPClient.from_transport(
+                        transport,
+                        window_size=128 * 1024 * 1024,
+                        max_packet_size=16 * 1024 * 1024,
+                    )
+                    return
+                except RETRYABLE_SFTP_ERRORS as exc:
+                    last_error = exc
+                    time.sleep(min(2 * attempt, 8))
+            raise RuntimeError(f"failed to establish SSH/SFTP session after retries: {last_error}") from last_error
+
+        def require_sftp() -> paramiko.SFTPClient:
+            if sftp is None:
+                reconnect_ssh()
+            assert sftp is not None
+            return sftp
+
+        def require_client() -> paramiko.SSHClient:
+            if client is None:
+                reconnect_ssh()
+            assert client is not None
+            return client
+
+        def sftp_call(label: str, operation: Callable[[paramiko.SFTPClient], Any], attempts: int = 4) -> Any:
+            last_error: BaseException | None = None
+            for attempt in range(1, attempts + 1):
+                try:
+                    return operation(require_sftp())
+                except RETRYABLE_SFTP_ERRORS as exc:
+                    last_error = exc
+                    print(f"warning: SFTP {label} failed on attempt {attempt}/{attempts}: {exc}", file=sys.stderr)
+                    protocol.update_status(
+                        job_dir,
+                        message=f"SFTP {label} retry {attempt}/{attempts}: {exc}",
+                    )
+                    reconnect_ssh()
+                    time.sleep(min(2 * attempt, 8))
+            raise RuntimeError(f"SFTP {label} failed after {attempts} attempts: {last_error}") from last_error
+
+        reconnect_ssh()
 
         remote_job_dir = f"{REMOTE_JOB_ROOT}/{job_id}"
         remote_prompt = f"{REMOTE_BASE}/workflows/runs/{job_id}_remote_sampling_api.json"
@@ -904,41 +1007,50 @@ def main() -> int:
         protocol.update_status(job_dir, stage="preflight", message="Checking remote model resources", overall_percent=6)
         emit_progress("preflight", 6)
         if not args.skip_preflight:
-            preflight_remote_resources(sftp, job_dir, args.remote_profile, profile_config)
+            sftp_call(
+                "preflight resource check",
+                lambda active_sftp: preflight_remote_resources(active_sftp, job_dir, args.remote_profile, profile_config),
+            )
 
         protocol.update_status(job_dir, stage="upload", message="Uploading job manifest", overall_percent=10)
         emit_progress("upload", 10)
-        upload_file(sftp, job_dir / "job.json", f"{remote_job_dir}/job.json")
-        upload_file(sftp, job_dir / "status.json", f"{remote_job_dir}/status.json")
-        upload_file(
-            sftp,
-            job_dir / "inputs.pt",
-            f"{remote_job_dir}/inputs.pt",
-            TransferMeter(job_dir=job_dir, stage="upload", label="Uploading latent inputs", start_percent=10, end_percent=35),
+        sftp_call("upload job manifest", lambda active_sftp: upload_file(active_sftp, job_dir / "job.json", f"{remote_job_dir}/job.json"))
+        sftp_call("upload status", lambda active_sftp: upload_file(active_sftp, job_dir / "status.json", f"{remote_job_dir}/status.json"))
+        sftp_call(
+            "upload latent inputs",
+            lambda active_sftp: upload_file(
+                active_sftp,
+                job_dir / "inputs.pt",
+                f"{remote_job_dir}/inputs.pt",
+                TransferMeter(job_dir=job_dir, stage="upload", label="Uploading latent inputs", start_percent=10, end_percent=35),
+            ),
         )
 
         protocol.update_status(job_dir, stage="queued", message="Waiting for exclusive remote sampling slot", overall_percent=35)
         emit_progress("queued", 35, lock={"port": args.remote_port, "state": "waiting"})
-        remote_lock = acquire_remote_service_lock(client, args.remote_port, job_id, max(300, args.timeout + 120))
+        remote_lock = acquire_remote_service_lock(require_client(), args.remote_port, job_id, max(300, args.timeout + 120))
         protocol.update_status(job_dir, stage="queued", message="Exclusive remote sampling slot acquired", overall_percent=35)
         emit_progress("queued", 35, lock={"port": args.remote_port, "state": "acquired", "path": remote_lock})
 
-        remote_pid = ensure_remote_comfy(client, args.remote_port, job_id)
+        remote_pid = ensure_remote_comfy(require_client(), args.remote_port, job_id)
         protocol.update_status(job_dir, stage="queued", message="Remote prompt submitted", overall_percent=35)
         emit_progress("queued", 35)
-        submit_remote_prompt(client, sftp, prompt, job_id, remote_job_dir, job_dir, args.remote_port, args.timeout)
+        submit_remote_prompt(require_client(), require_sftp(), prompt, job_id, remote_job_dir, job_dir, args.remote_port, args.timeout)
 
         protocol.update_status(job_dir, stage="download", message="Downloading output latent", overall_percent=90)
         emit_progress("download", 90)
-        download_file(
-            sftp,
-            f"{remote_job_dir}/output.pt",
-            job_dir / "output.pt",
-            TransferMeter(job_dir=job_dir, stage="download", label="Downloading output latent", start_percent=90, end_percent=98),
+        sftp_call(
+            "download output latent",
+            lambda active_sftp: download_file(
+                active_sftp,
+                f"{remote_job_dir}/output.pt",
+                job_dir / "output.pt",
+                TransferMeter(job_dir=job_dir, stage="download", label="Downloading output latent", start_percent=90, end_percent=98),
+            ),
         )
-        download_file(sftp, f"{remote_job_dir}/result.json", job_dir / "result.json")
-        merge_remote_status_into_local(sftp, remote_job_dir, job_dir)
-        append_remote_events(sftp, remote_job_dir, job_dir)
+        sftp_call("download result", lambda active_sftp: download_file(active_sftp, f"{remote_job_dir}/result.json", job_dir / "result.json"))
+        sftp_call("merge remote status", lambda active_sftp: merge_remote_status_into_local(active_sftp, remote_job_dir, job_dir))
+        sftp_call("append remote events", lambda active_sftp: append_remote_events(active_sftp, remote_job_dir, job_dir))
         result = json.load(open(job_dir / "result.json", encoding="utf-8"))
         protocol.update_status(job_dir, stage="completed", message="Remote sampling complete", overall_percent=100)
         protocol.write_report(job_dir, result)

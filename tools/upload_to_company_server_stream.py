@@ -124,7 +124,23 @@ def upload_file(client: paramiko.SSHClient, local: Path, remote: str) -> None:
         print(f"skip {remote}: already complete ({size} bytes)", flush=True)
         return
     if final_size is not None and final_size != size:
-        raise RuntimeError(f"remote file exists with unexpected size: {remote} ({final_size} != {size})")
+        if final_size < size:
+            tmp_remote = remote + ".uploading"
+            tmp_size = remote_size(client, tmp_remote)
+            if tmp_size is None or tmp_size < final_size:
+                print(
+                    f"resume candidate {remote}: moving partial final file to {tmp_remote} ({final_size}/{size} bytes)",
+                    flush=True,
+                )
+                run_text(client, f"mv -f -- {shlex.quote(remote)} {shlex.quote(tmp_remote)}")
+            else:
+                print(
+                    f"remove stale partial final file {remote}; newer upload temp exists ({tmp_size}/{size} bytes)",
+                    flush=True,
+                )
+                run_text(client, f"rm -f -- {shlex.quote(remote)}")
+        else:
+            raise RuntimeError(f"remote file exists with unexpected size: {remote} ({final_size} != {size})")
 
     tmp_remote = remote + ".uploading"
     offset = remote_size(client, tmp_remote) or 0
@@ -139,6 +155,36 @@ def upload_file(client: paramiko.SSHClient, local: Path, remote: str) -> None:
     if completed_size != size:
         raise RuntimeError(f"upload incomplete: {tmp_remote} ({completed_size} != {size})")
     run_text(client, f"mv -f -- {shlex.quote(tmp_remote)} {shlex.quote(remote)}")
+
+
+def connect_with_retry(server_exec, ssh_port: int, attempts: int = 4) -> paramiko.SSHClient:
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(
+                "127.0.0.1",
+                port=ssh_port,
+                username=server_exec.SERVER_USER,
+                password=os.environ.get("DGX_SERVER_PASSWORD") or server_exec.SERVER_PASSWORD,
+                timeout=30,
+                banner_timeout=45,
+                auth_timeout=30,
+                look_for_keys=False,
+                allow_agent=False,
+            )
+            transport = client.get_transport()
+            if transport is not None:
+                transport.set_keepalive(30)
+            return client
+        except Exception as exc:
+            last_error = exc
+            client.close()
+            if attempt < attempts:
+                print(f"ssh connect attempt {attempt}/{attempts} failed: {exc}; retrying...", flush=True)
+                time.sleep(2 * attempt)
+    raise RuntimeError(f"failed to connect to remote server after {attempts} attempts: {last_error}")
 
 
 def main() -> int:
@@ -156,24 +202,9 @@ def main() -> int:
             _out, err = jump_tunnel.communicate(timeout=2)
             print(err, file=sys.stderr, end="")
             return jump_tunnel.returncode or 1
-        wait_local_port(ssh_port)
+        wait_local_port(ssh_port, timeout=30.0)
 
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(
-            "127.0.0.1",
-            port=ssh_port,
-            username=server_exec.SERVER_USER,
-            password=os.environ.get("DGX_SERVER_PASSWORD") or server_exec.SERVER_PASSWORD,
-            timeout=15,
-            banner_timeout=15,
-            auth_timeout=15,
-            look_for_keys=False,
-            allow_agent=False,
-        )
-        transport = client.get_transport()
-        if transport is not None:
-            transport.set_keepalive(30)
+        client = connect_with_retry(server_exec, ssh_port)
         try:
             for pair in args.pair:
                 if "=" not in pair:

@@ -1,5 +1,4 @@
 import { app } from "/scripts/app.js";
-import { api } from "/scripts/api.js";
 
 const PANEL_ID = "remote-workflow-runtime-controller";
 const CONFIG_KEY = "remoteWorkflowRuntime.config.v1";
@@ -13,7 +12,7 @@ const DEFAULT_CONFIG = {
   remote_profile: "auto",
 };
 
-window.__remoteWorkflowRuntimeControllerVersion = "20260705-workflow-status-events-v1";
+window.__remoteWorkflowRuntimeControllerVersion = "20260706-convert-canvas-v1";
 
 function ensureStyle() {
   if (document.getElementById(`${PANEL_ID}-style`)) return;
@@ -435,6 +434,141 @@ function summarizePlan(plan) {
   return lines.join("\n");
 }
 
+function findInputSlot(node, name) {
+  return (node.inputs || []).findIndex((input) => input?.name === name);
+}
+
+function setWidgetValue(node, name, value) {
+  const widget = (node.widgets || []).find((item) => item?.name === name);
+  if (!widget) return false;
+  widget.value = value;
+  if (typeof widget.callback === "function") {
+    widget.callback(value, app.canvas, node, app.canvas?.graph_mouse, {});
+  }
+  return true;
+}
+
+function convertedSamplerInputs(convertedPrompt, nodeId) {
+  const convertedNode = convertedPrompt?.[String(nodeId)];
+  if (!convertedNode || convertedNode.class_type !== "Remote_Sampling_local") return null;
+  return convertedNode.inputs || {};
+}
+
+function copyRemoteSamplerWidgets(node, inputs) {
+  const widgetNames = [
+    "seed",
+    "steps",
+    "cfg",
+    "sampler_name",
+    "scheduler",
+    "denoise",
+    "remote_profile",
+    "project_root",
+    "python_executable",
+    "timeout_sec",
+    "sampler_id",
+    "allow_fixed_profile",
+  ];
+  for (const name of widgetNames) {
+    const value = inputs[name];
+    if (!Array.isArray(value) && value !== undefined) {
+      setWidgetValue(node, name, value);
+    }
+  }
+}
+
+function replaceSamplerNodeOnCanvas(oldNode, convertedPrompt) {
+  const inputs = convertedSamplerInputs(convertedPrompt, oldNode.id);
+  if (!inputs) {
+    throw new Error(`Converted prompt does not contain Remote_Sampling_local for node ${oldNode.id}.`);
+  }
+  const graph = app.graph;
+  const oldId = oldNode.id;
+  const oldPos = [oldNode.pos[0], oldNode.pos[1]];
+  const oldSize = oldNode.size ? [oldNode.size[0], Math.max(oldNode.size[1], 330)] : undefined;
+  const oldTitle = oldNode.title && oldNode.title !== oldNode.type ? oldNode.title : "Remote Sampling Local";
+  const oldInputLinks = {};
+  for (const input of oldNode.inputs || []) {
+    if (input?.link != null) oldInputLinks[input.name] = graph.links?.[input.link];
+  }
+  const oldOutputLinks = [];
+  for (const output of oldNode.outputs || []) {
+    for (const linkId of output?.links || []) {
+      const link = graph.links?.[linkId];
+      if (link) oldOutputLinks.push(link);
+    }
+  }
+
+  graph.remove(oldNode);
+
+  const liteGraph = globalThis.LiteGraph;
+  if (!liteGraph?.createNode) {
+    throw new Error("ComfyUI frontend does not expose LiteGraph.createNode().");
+  }
+  const remoteNode = liteGraph.createNode("Remote_Sampling_local");
+  if (!remoteNode) {
+    throw new Error("Could not create Remote_Sampling_local. Reload ComfyUI and confirm the custom node is installed locally.");
+  }
+  remoteNode.id = oldId;
+  remoteNode.pos = oldPos;
+  remoteNode.size = oldSize;
+  remoteNode.title = oldTitle;
+  graph.add(remoteNode);
+  copyRemoteSamplerWidgets(remoteNode, inputs);
+
+  for (const name of ["positive", "negative", "latent_image"]) {
+    const link = oldInputLinks[name];
+    const targetSlot = findInputSlot(remoteNode, name);
+    if (link && targetSlot >= 0) {
+      const origin = graph.getNodeById(link.origin_id);
+      if (origin) origin.connect(link.origin_slot, remoteNode, targetSlot);
+    }
+  }
+
+  for (const link of oldOutputLinks) {
+    const target = graph.getNodeById(link.target_id);
+    if (target) remoteNode.connect(0, target, link.target_slot);
+  }
+  return remoteNode;
+}
+
+function applyConvertedPromptToCanvas(convertedPrompt, convertedNodeIds = []) {
+  if (!convertedPrompt || typeof convertedPrompt !== "object") {
+    throw new Error("Conversion did not return a converted_prompt_object.");
+  }
+  const graph = app.graph;
+  const targetIds = convertedNodeIds.length
+    ? convertedNodeIds.map((id) => String(id))
+    : Object.entries(convertedPrompt)
+        .filter(([, node]) => node?.class_type === "Remote_Sampling_local")
+        .map(([id]) => String(id));
+  if (!targetIds.length) {
+    throw new Error("Converted prompt contains no Remote_Sampling_local nodes.");
+  }
+
+  const replaced = [];
+  for (const id of targetIds) {
+    const node = graph.getNodeById(Number(id)) || graph.getNodeById(id);
+    if (!node) {
+      throw new Error(`Current canvas does not contain sampler node ${id}. Reload the original workflow and convert again.`);
+    }
+    if (node.type === "Remote_Sampling_local") {
+      copyRemoteSamplerWidgets(node, convertedSamplerInputs(convertedPrompt, id) || {});
+      replaced.push(id);
+      continue;
+    }
+    if (!["KSampler", "KSamplerAdvanced"].includes(node.type)) {
+      throw new Error(`Node ${id} is ${node.type}, not a supported KSampler node.`);
+    }
+    replaceSamplerNodeOnCanvas(node, convertedPrompt);
+    replaced.push(id);
+  }
+
+  graph.setDirtyCanvas(true, true);
+  app.canvas?.setDirty?.(true, true);
+  return replaced;
+}
+
 function renderRuntimeStatus(panel, statusPayload, footerHtml = "") {
   const status = statusPayload?.status || {};
   const manifest = statusPayload?.manifest || {};
@@ -461,193 +595,6 @@ function renderRuntimeStatus(panel, statusPayload, footerHtml = "") {
       ${footerHtml}
     </div>
   `;
-}
-
-function findRemoteSamplingReport(historyItem) {
-  const outputs = historyItem?.outputs || {};
-  for (const output of Object.values(outputs)) {
-    for (const text of output?.text || []) {
-      if (typeof text === "string" && text.includes("Remote Sampling Report")) return text;
-    }
-  }
-  return "";
-}
-
-function reportLineValue(report, label) {
-  const line = report.split("\n").find((item) => item.startsWith(`${label}:`));
-  return line ? line.slice(label.length + 1).trim() : "";
-}
-
-function reportJsonValue(report, label) {
-  const value = reportLineValue(report, label);
-  if (!value || !value.startsWith("{")) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-function remoteSamplingReportDetails(report) {
-  if (!report) return {};
-  return {
-    job_id: reportLineValue(report, "job_id"),
-    total_elapsed_sec: Number(reportLineValue(report, "total_elapsed_sec")) || null,
-    upload: reportJsonValue(report, "upload"),
-    sampling: reportJsonValue(report, "sampling"),
-    download: reportJsonValue(report, "download"),
-  };
-}
-
-async function postWorkflowClientEvent(converted, stage, message, percent, promptId, details = {}, fatal = false) {
-  try {
-    return await postJson("/remote_workflow/runtime/client_event", {
-      run_id: converted.run_id,
-      project_root: converted.project_root,
-      stage,
-      message,
-      overall_percent: percent,
-      prompt_id: promptId,
-      details,
-      fatal,
-    });
-  } catch (error) {
-    console.warn("Remote workflow client_event failed", error);
-    return null;
-  }
-}
-
-function renderQueuedPromptStatus(panel, converted, promptId, state, historyItem = null) {
-  const report = findRemoteSamplingReport(historyItem);
-  let footer = `<pre>${escapeHtml(`workflow_run_id: ${converted.run_id}\nprompt_id: ${promptId}`)}</pre>`;
-  if (report) {
-    const sampling = reportLineValue(report, "sampling");
-    const upload = reportLineValue(report, "upload");
-    const download = reportLineValue(report, "download");
-    footer = `<pre>${escapeHtml(
-      [
-        `workflow_run_id: ${converted.run_id}`,
-        `prompt_id: ${promptId}`,
-        `job: ${reportLineValue(report, "job_id")}`,
-        `total: ${reportLineValue(report, "total_elapsed_sec")} sec`,
-        `upload: ${upload}`,
-        `sampling: ${sampling}`,
-        `download: ${download}`,
-      ].join("\n"),
-    )}</pre>`;
-  }
-  renderRuntimeStatus(
-    panel,
-    {
-      status: {
-        stage: state.stage,
-        message: state.message,
-        overall_percent: state.percent,
-        fatal: false,
-      },
-      manifest: converted,
-      events: [
-        {
-          stage: state.stage,
-          event: "prompt",
-          message: state.message,
-          overall_percent: state.percent,
-        },
-      ],
-    },
-    footer,
-  );
-}
-
-async function waitForQueuedPrompt(panel, converted, promptId) {
-  await postWorkflowClientEvent(
-    converted,
-    "queue",
-    "Converted prompt submitted to ComfyUI.",
-    76,
-    promptId,
-    { prompt_id: promptId },
-  );
-  renderQueuedPromptStatus(panel, converted, promptId, {
-    stage: "sampling",
-    message: "Converted prompt queued. Waiting for remote sampling job progress and completion...",
-    percent: 78,
-  });
-  let samplingEventWritten = false;
-  for (let attempt = 0; attempt < 1800; attempt += 1) {
-    const history = await getJson(`/history/${encodeURIComponent(promptId)}`);
-    const item = history?.[promptId];
-    if (item?.status?.completed) {
-      const report = findRemoteSamplingReport(item);
-      await postWorkflowClientEvent(
-        converted,
-        "complete",
-        "Guarded remote workflow run completed.",
-        100,
-        promptId,
-        {
-          prompt_id: promptId,
-          remote_sampling_report: remoteSamplingReportDetails(report),
-        },
-      );
-      renderQueuedPromptStatus(
-        panel,
-        converted,
-        promptId,
-        {
-          stage: "complete",
-          message: "Guarded remote workflow run completed.",
-          percent: 100,
-        },
-        item,
-      );
-      return item;
-    }
-    const messages = item?.status?.messages || [];
-    if (messages.some((message) => message?.[0] === "execution_error")) {
-      await postWorkflowClientEvent(
-        converted,
-        "failed",
-        "Converted prompt execution failed.",
-        100,
-        promptId,
-        { prompt_id: promptId, messages },
-        true,
-      );
-      renderQueuedPromptStatus(
-        panel,
-        converted,
-        promptId,
-        {
-          stage: "failed",
-          message: "Converted prompt execution failed.",
-          percent: 100,
-        },
-        item,
-      );
-      throw new Error("Converted prompt execution failed.");
-    }
-    if (attempt % 3 === 0) {
-      if (!samplingEventWritten) {
-        await postWorkflowClientEvent(
-          converted,
-          "sampling",
-          "Converted prompt is running in ComfyUI.",
-          84,
-          promptId,
-          { prompt_id: promptId },
-        );
-        samplingEventWritten = true;
-      }
-      renderQueuedPromptStatus(panel, converted, promptId, {
-        stage: "sampling",
-        message: "Converted prompt is running in ComfyUI. Node-level report will be summarized here when complete.",
-        percent: 84,
-      });
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-  throw new Error("Timed out waiting for queued guarded workflow prompt.");
 }
 
 function runStatusUrl(runId, projectRoot, tail = 20) {
@@ -713,27 +660,7 @@ async function currentWorkflowRequest(panel, endpoint, buttonSelector, workingMe
 }
 
 async function planCurrentWorkflow(panel) {
-  return currentWorkflowRequest(
-    panel,
-    "/remote_workflow/runtime/plan",
-    ".rwr-plan",
-    "Generating workflow-level remote runtime plan...",
-    "Workflow runtime plan generated.",
-  );
-}
-
-async function convertCurrentWorkflow(panel) {
-  return currentWorkflowRequest(
-    panel,
-    "/remote_workflow/runtime/convert",
-    ".rwr-convert",
-    "Generating workflow-level conversion bundle...",
-    "Workflow runtime conversion generated without queue submission.",
-  );
-}
-
-async function runCurrentWorkflow(panel) {
-  const button = panel.querySelector(".rwr-run");
+  const button = panel.querySelector(".rwr-plan");
   button.disabled = true;
   let stopPolling = null;
   try {
@@ -741,29 +668,56 @@ async function runCurrentWorkflow(panel) {
     const { prompt, workflow } = await graphPrompt();
     const config = configFromPanel(panel);
     saveRuntimeConfig(config);
-    setMessage(panel, "Creating workflow runtime plan...");
+    setMessage(panel, "Checking workflow and aligning remote resources...");
+    const plan = await postJson("/remote_workflow/runtime/plan", runtimePayload(panel, { prompt, workflow }));
+    stopPolling = startStatusPolling(panel, plan.run_id, config.project_root);
+    const ready = await postJson(
+      "/remote_workflow/runtime/run",
+      runtimePayload(panel, { run_id: plan.run_id, prompt, workflow }),
+    );
+    renderRuntimeStatus(
+      panel,
+      { status: ready.status, manifest: ready, events: [] },
+      `<pre>${escapeHtml(summarizePlan(ready))}</pre>`,
+    );
+  } catch (error) {
+    const detail = error.payload ? JSON.stringify(error.payload, null, 2) : error.stack || error.message;
+    setMessage(panel, `Check and sync failed:<pre>${escapeHtml(detail)}</pre>`, "rwr-error");
+  } finally {
+    if (stopPolling) stopPolling();
+    button.disabled = false;
+  }
+}
+
+async function convertCurrentWorkflow(panel) {
+  const button = panel.querySelector(".rwr-convert");
+  button.disabled = true;
+  let stopPolling = null;
+  try {
+    setMessage(panel, "Building API prompt from current graph...");
+    const { prompt, workflow } = await graphPrompt();
+    const config = configFromPanel(panel);
+    saveRuntimeConfig(config);
+    setMessage(panel, "Checking remote readiness and preparing canvas conversion...");
     const plan = await postJson("/remote_workflow/runtime/plan", runtimePayload(panel, { prompt, workflow }));
     stopPolling = startStatusPolling(panel, plan.run_id, config.project_root);
     const converted = await postJson(
       "/remote_workflow/runtime/run",
       runtimePayload(panel, { run_id: plan.run_id, prompt, workflow }),
     );
-    if (!converted.converted_prompt_object) {
-      throw new Error("Conversion did not return converted_prompt_object.");
-    }
+    const remotePlan = converted.remote_execution_plan_object || {};
+    const replaced = applyConvertedPromptToCanvas(
+      converted.converted_prompt_object,
+      remotePlan.converted_node_ids || converted.converted_node_ids || [],
+    );
     renderRuntimeStatus(
       panel,
       { status: converted.status, manifest: converted, events: [] },
-      `<pre>${escapeHtml(summarizePlan(converted))}</pre>`,
+      `<pre>${escapeHtml(`${summarizePlan(converted)}\n\ncanvas converted nodes: ${replaced.join(", ")}\n\nNext: click ComfyUI's native Queue/Run button to generate.`)}</pre>`,
     );
-    await postJson("/remote_workflow/runtime/queue_and_watch", runtimePayload(panel, {
-      run_id: converted.run_id,
-    }));
-    await waitForBackendWorkflowRun(panel, converted.run_id, config.project_root);
   } catch (error) {
-    if (stopPolling) stopPolling();
     const detail = error.payload ? JSON.stringify(error.payload, null, 2) : error.stack || error.message;
-    setMessage(panel, `Guarded workflow run failed:<pre>${escapeHtml(detail)}</pre>`, "rwr-error");
+    setMessage(panel, `Canvas conversion failed:<pre>${escapeHtml(detail)}</pre>`, "rwr-error");
   } finally {
     if (stopPolling) stopPolling();
     button.disabled = false;
@@ -781,9 +735,8 @@ function createPanel() {
     <div class="rwr-header">
       <div class="rwr-title">Remote Workflow Runtime</div>
       <div class="rwr-actions">
-        <button class="rwr-plan" type="button">Plan Current Workflow</button>
-        <button class="rwr-convert" type="button">Convert</button>
-        <button class="rwr-run" type="button">Run Guarded</button>
+        <button class="rwr-plan" type="button">Check & Sync</button>
+        <button class="rwr-convert" type="button">Convert Canvas</button>
         <button class="rwr-toggle" type="button">Hide</button>
       </div>
     </div>
@@ -825,7 +778,7 @@ function createPanel() {
         </div>
       </details>
       <div class="rwr-output">
-        <div class="rwr-message">Ready. Planning creates a workflow-level bundle without sampling or latent upload.</div>
+        <div class="rwr-message">Ready. Check & Sync aligns the remote side. Convert Canvas replaces local KSampler nodes, then use ComfyUI's native Queue/Run button.</div>
       </div>
     </div>
   `;
@@ -851,7 +804,6 @@ function createPanel() {
   });
   panel.querySelector(".rwr-plan").addEventListener("click", () => planCurrentWorkflow(panel));
   panel.querySelector(".rwr-convert").addEventListener("click", () => convertCurrentWorkflow(panel));
-  panel.querySelector(".rwr-run").addEventListener("click", () => runCurrentWorkflow(panel));
   return panel;
 }
 

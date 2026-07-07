@@ -12,9 +12,10 @@ The plugin package is in `ComfyUI-Remote-Sampling`.
 
 The recommended user-facing entry is the local ComfyUI floating panel:
 
-- `Plan Current Workflow`: analyze the current graph, list model/LoRA/custom-node dependencies, and create an audit bundle without queueing.
-- `Convert`: generate a fresh per-run converted prompt and remote execution plan without queueing.
-- `Run Guarded`: create a fresh workflow runtime plan, poll `workflow_status.json` / `workflow_events.jsonl` while backend guards run, check/sync remote resources and custom nodes, run dependency planning and remote import smoke, perform runtime conversion, then ask the backend watcher to queue and monitor the converted prompt.
+- `Check & Sync`: analyze the current graph, check/sync remote model and LoRA resources, check/sync remote custom nodes, record dependency plans, and run the remote import smoke test without queueing the workflow.
+- `Convert Canvas`: generate a fresh per-run converted prompt and remote execution plan, then replace supported local `KSampler` nodes on the current canvas with `Remote_Sampling_local`.
+
+After `Convert Canvas` succeeds, use ComfyUI's native Queue/Run button to generate images. The plugin prepares and converts the workflow; ComfyUI remains responsible for normal workflow execution.
 
 Do not use old converted workflow files as the formal entry point. The workflow-level path is designed to convert from the current source prompt for every run, preventing stale LoRA/profile contamination.
 
@@ -56,7 +57,7 @@ Workflow-level runs also produce:
 - `workflow_events.jsonl`
 - `workflow_runtime_report.txt`
 
-The frontend reads `/remote_workflow/runtime/run_status?run_id=...&project_root=...` while `Run Guarded` is preparing and executing a workflow. The backend watcher owns prompt queueing and terminal state updates, so `workflow_status.json`, `workflow_events.jsonl` and `workflow_runtime_report.txt` still reach `complete` or `failed` if the browser is refreshed after queue submission.
+The frontend reads `/remote_workflow/runtime/run_status?run_id=...&project_root=...` while `Check & Sync` or `Convert Canvas` prepares the workflow. After canvas conversion, sampling is triggered by ComfyUI's native Queue/Run button and the node-level monitor displays transfer and sampling progress.
 
 The local node keeps its first output as `LATENT` for workflow compatibility.
 
@@ -87,8 +88,8 @@ The workflow runtime is fail-closed by default:
 
 - missing local model/LoRA resources block conversion
 - unsupported model or CLIP chains block conversion
-- missing remote model/LoRA resources are uploaded before queueing when auto-sync is enabled
-- remote custom node packages are checked/synced before queueing
+- missing remote model/LoRA resources are uploaded before canvas conversion when auto-sync is enabled
+- remote custom node packages are checked/synced before canvas conversion
 - custom node dependency commands are recorded; actual pip install requires explicit approval
 - remote ComfyUI import smoke must find required custom node classes in `object_info`
 - ambiguous custom node package discovery fails closed instead of silently choosing a package
