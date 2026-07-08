@@ -597,6 +597,73 @@ def read_workflow_runtime_run_status(project_root: str | Path | None, run_id: st
     }
 
 
+def _run_summary_for_dir(run_dir: Path) -> dict[str, Any]:
+    paths = _workflow_paths(run_dir)
+    status: dict[str, Any] | None = None
+    manifest: dict[str, Any] | None = None
+    read_errors: list[dict[str, str]] = []
+    try:
+        status = _read_json_file(paths["status"]) if paths["status"].is_file() else None
+    except Exception as exc:
+        read_errors.append({"path": str(paths["status"]), "type": type(exc).__name__, "message": str(exc)})
+    try:
+        manifest = _read_json_file(paths["manifest"]) if paths["manifest"].is_file() else None
+    except Exception as exc:
+        read_errors.append({"path": str(paths["manifest"]), "type": type(exc).__name__, "message": str(exc)})
+    report_path = paths["report"] if paths["report"].is_file() else None
+    stage = (status or {}).get("stage") or (manifest or {}).get("stage") or "unknown"
+    message = (status or {}).get("message") or (manifest or {}).get("message") or ""
+    fatal = bool((status or {}).get("fatal") or not bool((manifest or {"ok": True}).get("ok", True)))
+    details = (status or {}).get("details") if isinstance((status or {}).get("details"), dict) else {}
+    error = (manifest or {}).get("error") if isinstance((manifest or {}).get("error"), dict) else None
+    prompt_id = (status or {}).get("prompt_id") or (manifest or {}).get("prompt_id")
+    job_id = (status or {}).get("job_id") or details.get("job_id")
+    remote_report = details.get("remote_sampling_report") if isinstance(details.get("remote_sampling_report"), dict) else {}
+    if not job_id and isinstance(remote_report, dict):
+        job_id = remote_report.get("job_id")
+    elapsed = (status or {}).get("elapsed_sec") or (manifest or {}).get("elapsed_sec")
+    if not elapsed and isinstance(remote_report, dict):
+        elapsed = remote_report.get("total_elapsed_sec")
+    mtime = max(
+        [path.stat().st_mtime for path in (paths["status"], paths["manifest"], paths["report"]) if path.is_file()]
+        or [run_dir.stat().st_mtime]
+    )
+    return {
+        "run_id": run_dir.name,
+        "run_dir": str(run_dir),
+        "stage": stage,
+        "message": message,
+        "fatal": fatal,
+        "ok": not fatal,
+        "updated_at": (status or {}).get("updated_at") or (manifest or {}).get("updated_at"),
+        "mtime": mtime,
+        "prompt_id": prompt_id,
+        "job_id": job_id,
+        "elapsed_sec": elapsed,
+        "workflow_status": str(paths["status"]) if paths["status"].is_file() else None,
+        "workflow_events": str(paths["events"]) if paths["events"].is_file() else None,
+        "workflow_report": str(report_path) if report_path else None,
+        "error": error,
+        "read_errors": read_errors,
+    }
+
+
+def list_workflow_runtime_runs(project_root: str | Path | None, *, limit: int = 12) -> dict[str, Any]:
+    root = Path(project_root) if project_root else DEFAULT_PROJECT_ROOT
+    runs_dir = root / "runs"
+    if not runs_dir.is_dir():
+        return {"ok": True, "project_root": str(root), "runs_dir": str(runs_dir), "runs": []}
+    safe_limit = max(1, min(100, int(limit)))
+    candidates = [path for path in runs_dir.iterdir() if path.is_dir() and path.name.startswith("workflow_runtime_")]
+    candidates.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return {
+        "ok": True,
+        "project_root": str(root),
+        "runs_dir": str(runs_dir),
+        "runs": [_run_summary_for_dir(path) for path in candidates[:safe_limit]],
+    }
+
+
 def record_workflow_runtime_client_event(payload: dict[str, Any]) -> dict[str, Any]:
     project_root = project_root_from_payload(payload) if isinstance(payload, dict) else DEFAULT_PROJECT_ROOT
     run_id = str(payload.get("run_id") or "")
@@ -1304,6 +1371,9 @@ def _check_and_sync_resources(plan: dict[str, Any], payload: dict[str, Any]) -> 
     )
     options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
     auto_sync = options.get("auto_sync_resources", True)
+    resource_hash_strategy = str(options.get("resource_hash_strategy") or "size_only")
+    if resource_hash_strategy not in {"size_only", "sha256_on_demand", "sha256_required"}:
+        resource_hash_strategy = "size_only"
     if diff.get("fatal"):
         return _fail_with_plan(plan, "resource_plan", "ResourcePreflightFailed", "Remote resource diff is fatal.", details=diff)
     if int(diff.get("summary", {}).get("upload_required", 0)) > 0:
@@ -1325,6 +1395,8 @@ def _check_and_sync_resources(plan: dict[str, Any], payload: dict[str, Any]) -> 
                 str(resources_diff_path),
                 "--output",
                 str(sync_report_path),
+                "--hash-strategy",
+                resource_hash_strategy,
             ],
             timeout=7200,
         )
@@ -1390,6 +1462,82 @@ def _check_and_sync_custom_nodes(plan: dict[str, Any], payload: dict[str, Any]) 
     sync_report_path = run_dir / "custom_nodes_sync_report.json"
     dependency_report_path = run_dir / "remote_custom_node_dependency_install.json"
     import_smoke_path = run_dir / "remote_custom_node_import_smoke.json"
+    custom_nodes_plan = _read_json_file(custom_nodes_plan_path)
+    custom_summary = custom_nodes_plan.get("summary", {}) if isinstance(custom_nodes_plan.get("summary"), dict) else {}
+    package_count = int(custom_summary.get("package_count", 0) or 0)
+    class_count = int(custom_summary.get("custom_class_count", 0) or 0)
+    if package_count == 0 and class_count == 0:
+        env_report = {
+            "schema_version": "remote-environment-report-v1",
+            "checked_at": _now_text(),
+            "remote_base": custom_nodes_plan.get("remote_base"),
+            "remote_custom_nodes_root": custom_nodes_plan.get("remote_custom_nodes_root"),
+            "packages": [],
+            "skipped": True,
+            "skip_reason": "no custom node packages in workflow plan",
+            "summary": {
+                "package_count": 0,
+                "ready_for_import_smoke": 0,
+                "sync_required": 0,
+                "remote_package_incomplete": 0,
+            },
+            "fatal": False,
+        }
+        dependency_report = {
+            "schema_version": "remote-custom-node-dependency-install-v1",
+            "created_at": _now_text(),
+            "execute": False,
+            "commands": [],
+            "skipped": True,
+            "skip_reason": "no custom node packages in workflow plan",
+            "summary": {"command_count": 0, "executed": False, "failed": 0},
+            "fatal": False,
+        }
+        import_smoke = {
+            "schema_version": "remote-custom-node-import-smoke-v1",
+            "checked_at": _now_text(),
+            "started_remote_service": False,
+            "classes": [],
+            "object_info": {
+                "ok": True,
+                "object_info_count": None,
+                "classes": [],
+                "missing_classes": [],
+                "reason": "no custom classes in workflow plan",
+            },
+            "skipped": True,
+            "skip_reason": "no custom node packages in workflow plan",
+            "summary": {"class_count": 0, "missing_class_count": 0, "object_info_count": None},
+            "fatal": False,
+        }
+        write_json(env_report_path, env_report)
+        write_json(dependency_report_path, dependency_report)
+        write_json(import_smoke_path, import_smoke)
+        manifest = _copy_json_value(str(run_dir / "manifest.json")) or plan
+        manifest.update(
+            {
+                "remote_environment_report": str(env_report_path),
+                "remote_environment_report_sha256": json_sha256(env_report),
+                "custom_nodes_sync_report": None,
+                "custom_nodes_sync_report_sha256": None,
+                "remote_custom_node_dependency_install": str(dependency_report_path),
+                "remote_custom_node_dependency_install_sha256": json_sha256(dependency_report),
+                "remote_custom_node_import_smoke": str(import_smoke_path),
+                "remote_custom_node_import_smoke_sha256": json_sha256(import_smoke),
+                "remote_environment_ready": True,
+                "remote_environment_short_circuit": True,
+            }
+        )
+        status = _write_workflow_status(
+            run_dir,
+            str(plan["run_id"]),
+            "remote_env",
+            "No custom node packages detected; remote custom-node environment check skipped.",
+            overall_percent=70,
+            details={"package_count": 0, "class_count": 0, "short_circuit": True},
+        )
+        _update_manifest_observability(run_dir, manifest, status)
+        return manifest
     _write_workflow_status(
         run_dir,
         str(plan["run_id"]),

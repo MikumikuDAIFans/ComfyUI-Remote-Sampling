@@ -85,6 +85,14 @@ manifest.json
 
 因此资源检查、资源同步、自定义节点同步、依赖计划、import smoke 和转换阶段可以在面板中实时或准实时看到。转换成功后，采样由 ComfyUI 原生 Queue/Run 触发，采样进度显示在 `Remote_Sampling_local` 节点内面板和 job 审计文件中。
 
+面板下方的 `Recent Runs` 区域会列出最近 workflow-level run。每条记录提供：
+
+- `Run Dir`：复制本次 run bundle 目录。
+- `Status`：复制 `workflow_status.json` 路径。
+- `Report`：复制 `workflow_runtime_report.txt` 路径。
+- `Error`：复制失败摘要；成功或非失败 run 会禁用该按钮。
+- `JSON`：复制该 run 的诊断摘要，便于粘贴给 Codex 或手动排障。
+
 `run_id` 复用规则：
 
 - `Check & Sync` / `Convert Canvas` 会把本次 plan 绑定到当前 source prompt/workflow hash。

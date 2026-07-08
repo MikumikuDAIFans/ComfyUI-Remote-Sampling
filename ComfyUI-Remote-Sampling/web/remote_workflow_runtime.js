@@ -182,6 +182,77 @@ function ensureStyle() {
     #${PANEL_ID} .rwr-event strong {
       color: #dbe4ef;
     }
+    #${PANEL_ID} .rwr-diagnostics {
+      border-top: 1px solid #263244;
+      margin-top: 10px;
+      padding-top: 10px;
+    }
+    #${PANEL_ID} .rwr-diagnostics-header {
+      align-items: center;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    #${PANEL_ID} .rwr-diagnostics-title {
+      color: #f8fafc;
+      font-weight: 700;
+    }
+    #${PANEL_ID} .rwr-run-list {
+      display: grid;
+      gap: 7px;
+    }
+    #${PANEL_ID} .rwr-run-item {
+      background: #0b1220;
+      border: 1px solid #263244;
+      border-radius: 8px;
+      display: grid;
+      gap: 5px;
+      padding: 8px;
+    }
+    #${PANEL_ID} .rwr-run-top,
+    #${PANEL_ID} .rwr-run-actions {
+      align-items: center;
+      display: flex;
+      gap: 6px;
+      justify-content: space-between;
+      min-width: 0;
+    }
+    #${PANEL_ID} .rwr-run-id {
+      color: #dbe4ef;
+      font-family: Consolas, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #${PANEL_ID} .rwr-run-stage {
+      border: 1px solid #334155;
+      border-radius: 999px;
+      color: #9be8ff;
+      flex: 0 0 auto;
+      font-weight: 700;
+      padding: 2px 7px;
+    }
+    #${PANEL_ID} .rwr-run-stage.failed,
+    #${PANEL_ID} .rwr-run-stage.error {
+      border-color: #ef4444;
+      color: #fca5a5;
+    }
+    #${PANEL_ID} .rwr-run-stage.complete {
+      border-color: #22c55e;
+      color: #8ef0ad;
+    }
+    #${PANEL_ID} .rwr-run-message {
+      color: #94a3b8;
+      line-height: 1.25;
+      max-height: 3.8em;
+      overflow: hidden;
+    }
+    #${PANEL_ID} .rwr-mini-button {
+      font-size: 11px;
+      padding: 3px 7px;
+      white-space: nowrap;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -326,6 +397,19 @@ function runtimePayload(panel, extra = {}) {
 
 function setMessage(panel, html, className = "") {
   panel.querySelector(".rwr-output").innerHTML = `<div class="rwr-message ${className}">${html}</div>`;
+}
+
+async function copyText(panel, text, label = "value") {
+  if (!text) {
+    setMessage(panel, `Nothing to copy for ${escapeHtml(label)}.`, "rwr-error");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    setMessage(panel, `Copied ${escapeHtml(label)}.`, "rwr-ok");
+  } catch (error) {
+    setMessage(panel, `Copy failed:<pre>${escapeHtml(error.message || String(error))}</pre>`, "rwr-error");
+  }
 }
 
 async function postJson(url, payload) {
@@ -603,13 +687,99 @@ function runStatusUrl(runId, projectRoot, tail = 20) {
   return `/remote_workflow/runtime/run_status?${params.toString()}`;
 }
 
+function recentRunsUrl(projectRoot, limit = 8) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (projectRoot) params.set("project_root", projectRoot);
+  return `/remote_workflow/runtime/recent?${params.toString()}`;
+}
+
+function errorSummaryForRun(run) {
+  const error = run?.error;
+  if (error && typeof error === "object") {
+    return `${error.type || "Error"}: ${error.message || JSON.stringify(error)}`;
+  }
+  if (run?.fatal || run?.stage === "failed") {
+    return run?.message || "Run failed without a structured error message.";
+  }
+  return "";
+}
+
+function renderRecentRuns(panel, payload) {
+  const target = panel.querySelector(".rwr-diagnostics");
+  if (!target) return;
+  const runs = Array.isArray(payload?.runs) ? payload.runs : [];
+  const items = runs.length
+    ? runs
+        .map((run) => {
+          const stage = String(run.stage || "unknown");
+          const errorSummary = errorSummaryForRun(run);
+          const copyPayload = {
+            run_id: run.run_id,
+            run_dir: run.run_dir,
+            stage,
+            message: run.message,
+            prompt_id: run.prompt_id,
+            job_id: run.job_id,
+            status: run.workflow_status,
+            events: run.workflow_events,
+            report: run.workflow_report,
+            error: run.error || null,
+          };
+          return `
+            <div class="rwr-run-item">
+              <div class="rwr-run-top">
+                <span class="rwr-run-id" title="${escapeAttr(run.run_id)}">${escapeHtml(run.run_id)}</span>
+                <span class="rwr-run-stage ${escapeAttr(stage)}">${escapeHtml(stage)}</span>
+              </div>
+              <div class="rwr-run-message">${escapeHtml(run.message || "No status message.")}</div>
+              <div class="rwr-run-actions">
+                <button class="rwr-mini-button" type="button" data-copy-text="${escapeAttr(run.run_dir || "")}" data-copy-label="run directory">Run Dir</button>
+                <button class="rwr-mini-button" type="button" data-copy-text="${escapeAttr(run.workflow_status || "")}" data-copy-label="status path">Status</button>
+                <button class="rwr-mini-button" type="button" data-copy-text="${escapeAttr(run.workflow_report || "")}" data-copy-label="report path">Report</button>
+                <button class="rwr-mini-button" type="button" data-copy-text="${escapeAttr(errorSummary)}" data-copy-label="error summary"${errorSummary ? "" : " disabled"}>Error</button>
+                <button class="rwr-mini-button" type="button" data-copy-text="${escapeAttr(JSON.stringify(copyPayload, null, 2))}" data-copy-label="run summary">JSON</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("")
+    : `<div class="rwr-event">No workflow runtime runs found.</div>`;
+  target.innerHTML = `
+    <div class="rwr-diagnostics-header">
+      <div class="rwr-diagnostics-title">Recent Runs</div>
+      <button class="rwr-refresh-runs rwr-mini-button" type="button">Refresh</button>
+    </div>
+    <div class="rwr-run-list">${items}</div>
+  `;
+}
+
+async function refreshRecentRuns(panel) {
+  const config = configFromPanel(panel);
+  try {
+    const payload = await getJson(recentRunsUrl(config.project_root, 8));
+    renderRecentRuns(panel, payload);
+  } catch (error) {
+    const detail = error.payload ? JSON.stringify(error.payload, null, 2) : error.message;
+    const target = panel.querySelector(".rwr-diagnostics");
+    if (target) {
+      target.innerHTML = `<div class="rwr-message rwr-error">Recent runs failed:<pre>${escapeHtml(detail)}</pre></div>`;
+    }
+  }
+}
+
 function startStatusPolling(panel, runId, projectRoot) {
   let stopped = false;
+  let lastRecentRefresh = 0;
   const poll = async () => {
     if (stopped) return;
     try {
       const status = await getJson(runStatusUrl(runId, projectRoot, 20));
       renderRuntimeStatus(panel, status);
+      const now = Date.now();
+      if (now - lastRecentRefresh > 5000) {
+        lastRecentRefresh = now;
+        refreshRecentRuns(panel);
+      }
     } catch (error) {
       if (!stopped) {
         const detail = error.payload ? JSON.stringify(error.payload, null, 2) : error.message;
@@ -780,6 +950,13 @@ function createPanel() {
       <div class="rwr-output">
         <div class="rwr-message">Ready. Check & Sync aligns the remote side. Convert Canvas replaces local KSampler nodes, then use ComfyUI's native Queue/Run button.</div>
       </div>
+      <div class="rwr-diagnostics">
+        <div class="rwr-diagnostics-header">
+          <div class="rwr-diagnostics-title">Recent Runs</div>
+          <button class="rwr-refresh-runs rwr-mini-button" type="button">Refresh</button>
+        </div>
+        <div class="rwr-event">Loading workflow runtime history...</div>
+      </div>
     </div>
   `;
   document.body.appendChild(panel);
@@ -804,6 +981,17 @@ function createPanel() {
   });
   panel.querySelector(".rwr-plan").addEventListener("click", () => planCurrentWorkflow(panel));
   panel.querySelector(".rwr-convert").addEventListener("click", () => convertCurrentWorkflow(panel));
+  panel.addEventListener("click", (event) => {
+    const copyButton = event.target.closest("[data-copy-text]");
+    if (copyButton) {
+      copyText(panel, copyButton.getAttribute("data-copy-text") || "", copyButton.getAttribute("data-copy-label") || "value");
+      return;
+    }
+    if (event.target.closest(".rwr-refresh-runs")) {
+      refreshRecentRuns(panel);
+    }
+  });
+  refreshRecentRuns(panel);
   return panel;
 }
 

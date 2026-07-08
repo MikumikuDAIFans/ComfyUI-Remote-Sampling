@@ -62,6 +62,7 @@
    - 节点输出的 `Remote Sampling Report` 文本。
    - 本地 job 目录中的 `status.json`、`events.jsonl`、`remote_sampling_report.txt`。
    - workflow runtime run 目录中的 `workflow_status.json`、`workflow_events.jsonl`、`workflow_runtime_report.txt`。
+   - 前端面板 `Recent Runs` 中的 run 目录、status/report 路径、错误摘要和 JSON 摘要复制入口。
 
 ## 3. 前端面板职责
 
@@ -302,5 +303,5 @@ ps -eo pid,ppid,etime,cmd | grep -E "ComfyUI/main.py|remote_submit_prompt" | gre
 2. 对 `euler`、`dpmpp`、`res_multistep`、`seeds_2` 等采样器建立本地/远端等价性测试矩阵。
 3. 增加一键“转换前本地 dry-run”检查，确认原始本地 workflow 本身可执行。
 4. 增加资源 hash 策略配置：小文件默认 SHA256，大文件可按需 SHA256。
-5. 为前端面板增加运行历史、最新 job 快捷入口和错误摘要复制按钮。
-6. 为自定义节点同步增加 Linux 依赖检测和 ComfyUI Manager fallback。
+5. 继续完善自定义节点同步的 Linux 系统依赖诊断和 ComfyUI Manager fallback。
+6. 增加更完整的多远端、多 GPU 和并发 job 调度能力。

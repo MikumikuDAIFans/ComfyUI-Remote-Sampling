@@ -40,9 +40,9 @@
 
 入口：
 
-- `Plan Current Workflow`：生成 workflow-level plan bundle，不排队。
-- `Convert`：生成本次专属 converted prompt 和 remote execution plan，不排队。
-- `Run Guarded`：从当前画布即时生成 API prompt，先创建 workflow-level plan 并轮询 `/remote_workflow/runtime/run_status`，再执行资源检查/同步、自定义节点检查/同步、依赖安装计划和远端 import smoke，之后转换、审计、生成 run bundle，并由后端 watcher 提交 converted prompt、轮询 `/history/<prompt_id>`、写回 complete/failed。
+- `Check & Sync`：从当前画布即时生成 API prompt，创建 workflow-level plan，并执行资源检查/同步、自定义节点检查/同步、依赖安装计划和远端 import smoke。该步骤不提交 ComfyUI 队列。
+- `Convert Canvas`：重新从当前画布生成本次专属 converted prompt 和 remote execution plan，执行同一套 guarded preflight，然后把画布中的支持采样器替换为 `Remote_Sampling_local`。转换完成后，使用 ComfyUI 原生 Queue/Run 按钮出图。
+- `Recent Runs`：面板诊断区显示最近 workflow-level run，可复制 run 目录、`workflow_status.json`、`workflow_runtime_report.txt`、错误摘要和 JSON 摘要。
 
 面板 `Runtime Config` 必须参与正式请求：
 
@@ -68,11 +68,11 @@ manifest.json
 
 `manifest.json` 应记录 workflow status、events 和 report 的路径与 hash，用于证明本次运行来自当前 source workflow，而不是旧 converted workflow 或旧 profile。
 
-queue 后状态写回规则：
+原生 Queue/Run 后状态写回规则：
 
-- 前端可以订阅状态，但不得作为唯一 completion writer。
-- 后端 watcher 必须负责 prompt queue、history polling、Remote Sampling Report 提取和 terminal status 写回。
-- 浏览器刷新或关闭后，`workflow_status.json` 仍应最终进入 `complete` 或 `failed`。
+- 前端可以订阅 `Check & Sync` / `Convert Canvas` 的准备状态，但不得作为唯一 completion writer。
+- 正式出图由 ComfyUI 原生 Queue/Run 触发；底层 `Remote_Sampling_local` 负责采样 job 的 `status.json`、`events.jsonl` 和 `remote_sampling_report.txt`。
+- workflow-level run 的准备阶段状态记录在 `workflow_status.json`；采样阶段的真实传输和 step 进度以 node-level job bundle 为准。
 
 `run_id` 复用必须严格绑定 source identity：
 

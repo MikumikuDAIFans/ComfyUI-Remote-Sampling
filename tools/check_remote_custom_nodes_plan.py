@@ -5,6 +5,7 @@ import argparse
 import base64
 import json
 import os
+import importlib.util
 import shlex
 import subprocess
 import time
@@ -18,6 +19,19 @@ DEFAULT_SERVER_EXEC = Path(
         r"C:\Users\25454\.codex\skills\company-lab-2-server\scripts\server_exec.py",
     )
 )
+REMOTE_SESSION_PATH = Path(__file__).resolve().parents[1] / "ComfyUI-Remote-Sampling" / "remote_session.py"
+
+
+def load_remote_session():
+    spec = importlib.util.spec_from_file_location("remote_sampling_remote_session", REMOTE_SESSION_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {REMOTE_SESSION_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+remote_session = load_remote_session()
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -56,6 +70,12 @@ def remote_check(plan: dict[str, Any], server_exec: Path) -> dict[str, Any]:
         }
         for item in plan.get("packages", [])
     ]
+    if not packages:
+        return {
+            "packages": [],
+            "skipped": True,
+            "reason": "no custom node packages in plan",
+        }
     encoded = base64.b64encode(json.dumps(packages, ensure_ascii=False).encode("utf-8")).decode("ascii")
     remote_python = (
         "import base64,json,os;"
@@ -73,12 +93,10 @@ def remote_check(plan: dict[str, Any], server_exec: Path) -> dict[str, Any]:
         "print(json.dumps(out, ensure_ascii=False, indent=2))"
     )
     command = "cd /home/user02/remote_ComfyUI && python3 -c " + shlex.quote(remote_python)
-    completed = subprocess.run(
+    completed = remote_session.run_subprocess_with_retry(
         ["python", str(server_exec), "--cmd", command],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
         timeout=180,
+        attempts=3,
     )
     if completed.returncode != 0:
         raise RuntimeError(completed.stdout)
@@ -110,6 +128,10 @@ def build_report(plan: dict[str, Any], remote: dict[str, Any]) -> dict[str, Any]
                 "dependency_files": remote_item.get("dependency_files", []),
                 "action": action,
                 "manual_sync_hint": f'Compress "{package.get("local_path")}" and extract it to "{package.get("remote_path")}".',
+                "fallback_hint": (
+                    "If archive sync fails, install the same custom node package on the remote ComfyUI host "
+                    "with ComfyUI Manager or clone the package git repository into the shown remote_path, then rerun Check & Sync."
+                ),
             }
         )
     return {
@@ -118,6 +140,8 @@ def build_report(plan: dict[str, Any], remote: dict[str, Any]) -> dict[str, Any]
         "remote_base": plan.get("remote_base"),
         "remote_custom_nodes_root": plan.get("remote_custom_nodes_root"),
         "packages": packages,
+        "skipped": bool(remote.get("skipped")),
+        "skip_reason": remote.get("reason"),
         "summary": {
             "package_count": len(packages),
             "ready_for_import_smoke": sum(1 for item in packages if item["action"] == "ready_for_import_smoke"),

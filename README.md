@@ -59,6 +59,8 @@ Workflow-level runs also produce:
 
 The frontend reads `/remote_workflow/runtime/run_status?run_id=...&project_root=...` while `Check & Sync` or `Convert Canvas` prepares the workflow. After canvas conversion, sampling is triggered by ComfyUI's native Queue/Run button and the node-level monitor displays transfer and sampling progress.
 
+The floating panel also reads `/remote_workflow/runtime/recent?project_root=...` to show recent workflow-level runs. Each row can copy the run directory, workflow status path, workflow report path, failure summary, or a compact JSON summary for diagnostics.
+
 The local node keeps its first output as `LATENT` for workflow compatibility.
 
 ## Resource Preflight
@@ -122,6 +124,9 @@ The managed remote ComfyUI service also writes an owner token under:
 
 See:
 
+- `INSTALL.md`
+- `ARCHITECTURE.md`
+- `TROUBLESHOOTING.md`
 - `docs/remote_sampling_usage.md`
 - `docs/remote_sampling_workflow_conversion_rules.md`
 - `docs/plan.md`

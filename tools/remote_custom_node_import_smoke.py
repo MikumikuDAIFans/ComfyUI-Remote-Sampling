@@ -109,6 +109,32 @@ def main() -> int:
     args = parse_args()
     plan = read_json(args.custom_nodes_plan)
     classes = custom_classes(plan)
+    if not classes:
+        report = {
+            "schema_version": "remote-custom-node-import-smoke-v1",
+            "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "started_remote_service": False,
+            "classes": [],
+            "object_info": {
+                "ok": True,
+                "object_info_count": None,
+                "classes": [],
+                "missing_classes": [],
+                "reason": "no custom classes in plan",
+            },
+            "skipped": True,
+            "skip_reason": "no custom classes in plan",
+            "summary": {
+                "class_count": 0,
+                "missing_class_count": 0,
+                "object_info_count": None,
+            },
+            "fatal": False,
+        }
+        output = args.output or args.custom_nodes_plan.with_name("remote_custom_node_import_smoke.json")
+        write_json(output, report)
+        print(json.dumps({"ok": True, "output": str(output), "summary": report["summary"]}, ensure_ascii=False, indent=2))
+        return 0
     service = load_remote_service()
     started_by_us = False
     service_status_before = extract_json_object(service.status(timeout=120))

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import posixpath
@@ -26,6 +27,7 @@ REMOTE_CUSTOM_NODES_ROOT = os.environ.get(
     f"{REMOTE_BASE}/ComfyUI/custom_nodes",
 )
 REMOTE_TRANSFER_ROOT = os.environ.get("REMOTE_SAMPLING_REMOTE_TRANSFER_ROOT", f"{REMOTE_BASE}/transfer/custom_nodes")
+REMOTE_SESSION_PATH = Path(__file__).resolve().parents[1] / "ComfyUI-Remote-Sampling" / "remote_session.py"
 EXCLUDED_DIRS = {
     ".git",
     "__pycache__",
@@ -37,6 +39,18 @@ EXCLUDED_DIRS = {
     "node_modules",
 }
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".log", ".tmp"}
+
+
+def load_remote_session():
+    spec = importlib.util.spec_from_file_location("remote_sampling_remote_session", REMOTE_SESSION_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {REMOTE_SESSION_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+remote_session = load_remote_session()
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -85,14 +99,16 @@ def make_archive(package: dict[str, Any], output_dir: Path) -> tuple[Path, int, 
 
 
 def run_command(args: list[str], *, timeout: int) -> str:
-    completed = subprocess.run(args, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
+    completed = remote_session.run_subprocess_with_retry(args, timeout=timeout)
     if completed.returncode != 0:
         raise RuntimeError(completed.stdout)
     return completed.stdout
 
 
 def upload_archive(project_root: Path, archive: Path, remote_archive: str) -> str:
-    uploader = project_root / "tools" / "upload_to_company_server.py"
+    stream_uploader = project_root / "tools" / "upload_to_company_server_stream.py"
+    sftp_uploader = project_root / "tools" / "upload_to_company_server.py"
+    uploader = stream_uploader if stream_uploader.is_file() else sftp_uploader
     if not uploader.is_file():
         raise FileNotFoundError(uploader)
     return run_command(["python", str(uploader), f"{archive}={remote_archive}"], timeout=1800)
@@ -185,52 +201,76 @@ def main() -> int:
     results = []
     for package in packages_to_sync(plan, selected):
         package_name = str(package.get("package_name"))
-        remote_path = ensure_remote_under(str(package.get("remote_path")), REMOTE_CUSTOM_NODES_ROOT, label=f"{package_name}.remote_path")
-        remote_archive = ensure_remote_under(
-            f"{REMOTE_TRANSFER_ROOT}/{package_name}_{time.strftime('%Y%m%d_%H%M%S')}.zip",
-            REMOTE_TRANSFER_ROOT,
-            label=f"{package_name}.remote_archive",
-        )
-        archive, file_count, bytes_total = make_archive(package, archive_dir)
-        if args.dry_run:
-            upload_log = ""
-            extract_log = ""
-            backup_path = None
-            action = "dry_run"
-        else:
-            upload_log = upload_archive(args.project_root, archive, remote_archive)
-            extract_log, backup_path = extract_remote(args.server_exec, remote_archive, remote_path)
-            action = "synced"
-        results.append(
-            {
-                "package_name": package_name,
-                "local_path": package.get("local_path"),
-                "remote_path": remote_path,
-                "validated_remote_path": remote_path,
-                "archive": str(archive),
-                "remote_archive": remote_archive,
-                "backup_path": backup_path,
-                "file_count": file_count,
-                "bytes_total": bytes_total,
-                "upload_log_tail": upload_log[-2000:],
-                "extract_log_tail": extract_log[-2000:],
-                "action": action,
-            }
-        )
+        try:
+            remote_path = ensure_remote_under(str(package.get("remote_path")), REMOTE_CUSTOM_NODES_ROOT, label=f"{package_name}.remote_path")
+            remote_archive = ensure_remote_under(
+                f"{REMOTE_TRANSFER_ROOT}/{package_name}_{time.strftime('%Y%m%d_%H%M%S')}.zip",
+                REMOTE_TRANSFER_ROOT,
+                label=f"{package_name}.remote_archive",
+            )
+            archive, file_count, bytes_total = make_archive(package, archive_dir)
+            if args.dry_run:
+                upload_log = ""
+                extract_log = ""
+                backup_path = None
+                action = "dry_run"
+            else:
+                upload_log = upload_archive(args.project_root, archive, remote_archive)
+                extract_log, backup_path = extract_remote(args.server_exec, remote_archive, remote_path)
+                action = "synced"
+            results.append(
+                {
+                    "package_name": package_name,
+                    "local_path": package.get("local_path"),
+                    "remote_path": remote_path,
+                    "validated_remote_path": remote_path,
+                    "archive": str(archive),
+                    "remote_archive": remote_archive,
+                    "backup_path": backup_path,
+                    "file_count": file_count,
+                    "bytes_total": bytes_total,
+                    "upload_log_tail": upload_log[-2000:],
+                    "extract_log_tail": extract_log[-2000:],
+                    "action": action,
+                    "ok": True,
+                }
+            )
+        except Exception as exc:
+            results.append(
+                {
+                    "package_name": package_name,
+                    "local_path": package.get("local_path"),
+                    "remote_path": package.get("remote_path"),
+                    "action": "failed",
+                    "ok": False,
+                    "error": {"type": type(exc).__name__, "message": str(exc)},
+                    "fallback_hint": (
+                        "Fix the local package path or remote target, then rerun Check & Sync. "
+                        "If archive sync keeps failing, install the package on the remote ComfyUI host with ComfyUI Manager "
+                        "or clone/copy it manually to the same remote custom_nodes relative path."
+                    ),
+                }
+            )
+    fatal = any(item.get("ok") is False for item in results)
     report = {
         "schema_version": "custom-node-sync-report-v1",
         "synced_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "packages": results,
-        "summary": {"package_count": len(results), "synced": 0 if args.dry_run else len(results), "dry_run": bool(args.dry_run)},
-        "fatal": False,
+        "summary": {
+            "package_count": len(results),
+            "synced": 0 if args.dry_run else sum(1 for item in results if item.get("action") == "synced"),
+            "failed": sum(1 for item in results if item.get("action") == "failed"),
+            "dry_run": bool(args.dry_run),
+        },
+        "fatal": fatal,
         "dry_run": bool(args.dry_run),
         "remote_custom_nodes_root": REMOTE_CUSTOM_NODES_ROOT,
         "remote_transfer_root": REMOTE_TRANSFER_ROOT,
     }
     output = args.output or args.custom_nodes_plan.with_name("custom_nodes_sync_report.json")
     write_json(output, report)
-    print(json.dumps({"ok": True, "output": str(output), "summary": report["summary"]}, ensure_ascii=False, indent=2))
-    return 0
+    print(json.dumps({"ok": not fatal, "output": str(output), "summary": report["summary"]}, ensure_ascii=False, indent=2))
+    return 1 if fatal else 0
 
 
 if __name__ == "__main__":

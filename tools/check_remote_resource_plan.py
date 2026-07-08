@@ -5,6 +5,7 @@ import argparse
 import base64
 import json
 import os
+import importlib.util
 import shlex
 import subprocess
 import time
@@ -18,6 +19,19 @@ DEFAULT_SERVER_EXEC = Path(
         r"C:\Users\25454\.codex\skills\company-lab-2-server\scripts\server_exec.py",
     )
 )
+REMOTE_SESSION_PATH = Path(__file__).resolve().parents[1] / "ComfyUI-Remote-Sampling" / "remote_session.py"
+
+
+def load_remote_session():
+    spec = importlib.util.spec_from_file_location("remote_sampling_remote_session", REMOTE_SESSION_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {REMOTE_SESSION_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+remote_session = load_remote_session()
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -70,12 +84,10 @@ def remote_check(resources: list[dict[str, Any]], server_exec: Path) -> list[dic
         "print(json.dumps(out, ensure_ascii=False, indent=2))"
     )
     command = "cd /home/user02/remote_ComfyUI && python3 -c " + shlex.quote(remote_python)
-    completed = subprocess.run(
+    completed = remote_session.run_subprocess_with_retry(
         ["python", str(server_exec), "--cmd", command],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
         timeout=180,
+        attempts=3,
     )
     if completed.returncode != 0:
         raise RuntimeError(completed.stdout)

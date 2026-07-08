@@ -11,6 +11,7 @@ from .workflow_runtime import (
     create_workflow_runtime_conversion,
     create_workflow_runtime_guarded_run,
     create_workflow_runtime_plan,
+    list_workflow_runtime_runs,
     read_workflow_runtime_run_status,
     record_workflow_runtime_client_event,
     start_workflow_runtime_backend_queue,
@@ -161,6 +162,28 @@ async def remote_workflow_runtime_run_status(request):
     result = read_workflow_runtime_run_status(project_root, run_id, tail=tail)
     status_code = 200 if result.get("ok") else 404
     return web.json_response(result, status=status_code, headers={"Cache-Control": "no-store"})
+
+
+@PromptServer.instance.routes.get("/remote_workflow/runtime/recent")
+async def remote_workflow_runtime_recent(request):
+    project_root = request.query.get("project_root")
+    limit_text = request.query.get("limit", "12")
+    try:
+        limit = max(1, min(100, int(limit_text)))
+    except ValueError:
+        limit = 12
+    try:
+        result = list_workflow_runtime_runs(project_root, limit=limit)
+        return web.json_response(result, headers={"Cache-Control": "no-store"})
+    except Exception as error:
+        return web.json_response(
+            {
+                "ok": False,
+                "error": {"type": type(error).__name__, "message": str(error)},
+            },
+            status=500,
+            headers={"Cache-Control": "no-store"},
+        )
 
 
 @PromptServer.instance.routes.post("/remote_workflow/runtime/plan")

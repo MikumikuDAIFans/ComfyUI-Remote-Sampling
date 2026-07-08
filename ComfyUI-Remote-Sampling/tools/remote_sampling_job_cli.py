@@ -5,7 +5,6 @@ import argparse
 import importlib.util
 import json
 import os
-import posixpath
 import socket
 import subprocess
 import sys
@@ -61,6 +60,18 @@ def load_protocol():
 
 
 protocol = load_protocol()
+
+
+def load_remote_session():
+    spec = importlib.util.spec_from_file_location("remote_sampling_remote_session", PACKAGE_ROOT / "remote_session.py")
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load remote sampling remote_session")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+remote_session = load_remote_session()
 
 REMOTE_HELPER_SOURCE = r'''#!/usr/bin/env python3
 from __future__ import annotations
@@ -155,44 +166,11 @@ def emit_progress(event: str, overall_percent: float | None = None, **payload: A
     print("RS_PROGRESS " + json.dumps(data, ensure_ascii=False, sort_keys=True), flush=True)
 
 
-def mkdir_p(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
-    parts = [p for p in remote_dir.split("/") if p]
-    current = "/" if remote_dir.startswith("/") else "."
-    for part in parts:
-        current = posixpath.join(current, part)
-        try:
-            sftp.stat(current)
-        except FileNotFoundError:
-            sftp.mkdir(current)
-
-
-RETRYABLE_SFTP_ERRORS = (EOFError, OSError, paramiko.SSHException)
-
-
-def sftp_file_size(sftp: paramiko.SFTPClient, remote: str) -> int | None:
-    try:
-        return int(sftp.stat(remote).st_size)
-    except FileNotFoundError:
-        return None
-
-
-def sftp_remove_if_exists(sftp: paramiko.SFTPClient, remote: str) -> None:
-    try:
-        sftp.remove(remote)
-    except FileNotFoundError:
-        pass
-
-
-def finalize_uploaded_file(sftp: paramiko.SFTPClient, local: Path, remote: str) -> bool:
-    expected = local.stat().st_size
-    if sftp_file_size(sftp, remote) == expected:
-        return True
-    tmp = remote + ".uploading"
-    if sftp_file_size(sftp, tmp) == expected:
-        sftp_remove_if_exists(sftp, remote)
-        sftp.rename(tmp, remote)
-        return True
-    return False
+RETRYABLE_SFTP_ERRORS = remote_session.RETRYABLE_REMOTE_ERRORS
+mkdir_p = remote_session.mkdir_p
+sftp_file_size = remote_session.sftp_file_size
+sftp_remove_if_exists = remote_session.sftp_remove_if_exists
+finalize_uploaded_file = remote_session.finalize_uploaded_file
 
 
 class TransferMeter:
@@ -237,40 +215,21 @@ def upload_file(
     remote: str,
     meter: TransferMeter | None = None,
 ) -> dict[str, Any] | None:
-    mkdir_p(sftp, posixpath.dirname(remote))
-    if finalize_uploaded_file(sftp, local, remote):
-        if meter is not None:
-            total = local.stat().st_size
-            meter.update(total, total, force=True)
-            return meter.last_metrics
-        return None
-    tmp = remote + ".uploading"
-    sftp_remove_if_exists(sftp, tmp)
     if meter is not None:
         total = local.stat().st_size
 
         def callback(sent: int, total_bytes: int) -> None:
             meter.update(sent, total_bytes)
 
-        sftp.put(str(local), tmp, callback=callback)
+        remote_session.upload_file_atomic(sftp, local, remote, callback=callback)
         meter.update(total, total, force=True)
     else:
-        sftp.put(str(local), tmp)
-    sftp_remove_if_exists(sftp, remote)
-    sftp.rename(tmp, remote)
+        remote_session.upload_file_atomic(sftp, local, remote)
     return meter.last_metrics if meter is not None else None
 
 
 def upload_text(sftp: paramiko.SFTPClient, remote: str, text: str) -> None:
-    mkdir_p(sftp, posixpath.dirname(remote))
-    tmp = remote + ".uploading"
-    with sftp.file(tmp, "w") as f:
-        f.write(text)
-    try:
-        sftp.remove(remote)
-    except FileNotFoundError:
-        pass
-    sftp.rename(tmp, remote)
+    remote_session.upload_text_atomic(sftp, remote, text)
 
 
 def download_file(
@@ -288,12 +247,10 @@ def download_file(
         def callback(sent: int, total_bytes: int) -> None:
             meter.update(sent, total_bytes)
 
-        sftp.get(remote, str(tmp), callback=callback)
-        final_size = tmp.stat().st_size if tmp.exists() else 0
+        final_size = remote_session.download_file_atomic(sftp, remote, local, callback=callback)
         meter.update(final_size, final_size, force=True)
     else:
-        sftp.get(remote, str(tmp))
-    tmp.replace(local)
+        remote_session.download_file_atomic(sftp, remote, local)
     return meter.last_metrics if meter is not None else None
 
 
@@ -741,6 +698,16 @@ def read_remote_status(sftp: paramiko.SFTPClient, remote_job_dir: str) -> dict[s
         return None
 
 
+def read_remote_status_strict(sftp: paramiko.SFTPClient, remote_job_dir: str) -> dict[str, Any] | None:
+    try:
+        with sftp.file(remote_status_path(remote_job_dir), "r") as f:
+            return json.loads(f.read().decode("utf-8"))
+    except FileNotFoundError:
+        return None
+    except json.JSONDecodeError:
+        return None
+
+
 def remote_file_exists(sftp: paramiko.SFTPClient, remote_path: str) -> bool:
     try:
         sftp.stat(remote_path)
@@ -761,6 +728,22 @@ def read_remote_json(sftp: paramiko.SFTPClient, remote_path: str) -> dict[str, A
         return None
 
 
+def read_remote_json_strict(sftp: paramiko.SFTPClient, remote_path: str) -> dict[str, Any] | None:
+    try:
+        with sftp.file(remote_path, "r") as f:
+            return json.loads(f.read().decode("utf-8"))
+    except FileNotFoundError:
+        return None
+
+
+def remote_file_exists_strict(sftp: paramiko.SFTPClient, remote_path: str) -> bool:
+    try:
+        sftp.stat(remote_path)
+        return True
+    except FileNotFoundError:
+        return False
+
+
 def remote_job_completed(sftp: paramiko.SFTPClient, remote_job_dir: str) -> bool:
     result = read_remote_json(sftp, f"{remote_job_dir}/result.json")
     if result is not None and result.get("ok") is False:
@@ -768,6 +751,15 @@ def remote_job_completed(sftp: paramiko.SFTPClient, remote_job_dir: str) -> bool
     status = read_remote_status(sftp, remote_job_dir) or {}
     status_ok = status.get("stage") == "completed" or result is not None
     return status_ok and remote_file_exists(sftp, f"{remote_job_dir}/output.pt")
+
+
+def remote_job_completed_strict(sftp: paramiko.SFTPClient, remote_job_dir: str) -> bool:
+    result = read_remote_json_strict(sftp, f"{remote_job_dir}/result.json")
+    if result is not None and result.get("ok") is False:
+        return False
+    status = read_remote_status_strict(sftp, remote_job_dir) or {}
+    status_ok = status.get("stage") == "completed" or result is not None
+    return status_ok and remote_file_exists_strict(sftp, f"{remote_job_dir}/output.pt")
 
 
 def merge_remote_status_into_local(sftp: paramiko.SFTPClient, remote_job_dir: str, local_job_dir: Path) -> None:
@@ -822,13 +814,19 @@ def submit_remote_prompt(
     local_job_dir: Path,
     port: int,
     timeout: int,
+    sftp_call: Callable[[str, Callable[[paramiko.SFTPClient], Any]], Any] | None = None,
 ) -> None:
-    upload_text(sftp, REMOTE_HELPER, REMOTE_HELPER_SOURCE)
+    def with_sftp(label: str, operation: Callable[[paramiko.SFTPClient], Any]) -> Any:
+        if sftp_call is not None:
+            return sftp_call(label, operation)
+        return operation(sftp)
+
+    with_sftp("upload remote submit helper", lambda active_sftp: upload_text(active_sftp, REMOTE_HELPER, REMOTE_HELPER_SOURCE))
     code, _out, err = run_remote(client, f"chmod +x {shell_quote(REMOTE_HELPER)}", timeout=20)
     if code != 0:
         raise RuntimeError(err)
     remote_prompt = f"{REMOTE_BASE}/workflows/runs/{job_id}_remote_sampling_api.json"
-    upload_text(sftp, remote_prompt, json.dumps(prompt, ensure_ascii=False, indent=2))
+    with_sftp("upload remote prompt", lambda active_sftp: upload_text(active_sftp, remote_prompt, json.dumps(prompt, ensure_ascii=False, indent=2)))
     command = (
         f"{shell_quote(REMOTE_PYTHON)} {shell_quote(REMOTE_HELPER)} "
         f"--prompt {shell_quote(remote_prompt)} --port {port} "
@@ -852,7 +850,10 @@ def submit_remote_prompt(
         if channel.recv_stderr_ready():
             err_chunks.append(channel.recv_stderr(65536).decode("utf-8", errors="replace"))
         if now - last_poll >= 1.0:
-            remote_status = read_remote_status(sftp, remote_job_dir)
+            remote_status = with_sftp(
+                "read remote sampling status",
+                lambda active_sftp: read_remote_status_strict(active_sftp, remote_job_dir),
+            )
             if remote_status:
                 percent = sampling_overall_percent(remote_status)
                 sampling = remote_status.get("sampling", {})
@@ -879,11 +880,11 @@ def submit_remote_prompt(
         print(err, file=sys.stderr, end="")
     lines = [line for line in out.splitlines() if line.strip()]
     if not lines:
-        if remote_job_completed(sftp, remote_job_dir):
+        if with_sftp("check remote completion", lambda active_sftp: remote_job_completed_strict(active_sftp, remote_job_dir)):
             return
         raise RuntimeError("remote submit produced no output")
     result = json.loads(lines[-1])
-    if remote_job_completed(sftp, remote_job_dir):
+    if with_sftp("check remote completion", lambda active_sftp: remote_job_completed_strict(active_sftp, remote_job_dir)):
         return
     if code != 0 or not result.get("ok"):
         raise RuntimeError(f"remote sampling prompt failed: {json.dumps(result, ensure_ascii=False)[:4000]}")
@@ -910,8 +911,7 @@ def main() -> int:
     server_exec = load_server_exec()
     ssh_port = server_exec.free_port()
     tunnel: subprocess.Popen[str] = server_exec.open_tunnel(ssh_port)
-    client: paramiko.SSHClient | None = None
-    sftp: paramiko.SFTPClient | None = None
+    session: Any | None = None
     remote_pid: int | None = None
     remote_lock: str | None = None
     remote_job_dir: str | None = None
@@ -923,81 +923,79 @@ def main() -> int:
             return tunnel.returncode or 1
         wait_local_port(ssh_port)
 
-        def reconnect_ssh() -> None:
-            nonlocal client, sftp
-            if sftp is not None:
+        def restart_tunnel() -> None:
+            nonlocal ssh_port, tunnel, session
+            if tunnel.poll() is None:
+                tunnel.terminate()
                 try:
-                    sftp.close()
-                except Exception:
-                    pass
-                sftp = None
-            if client is not None:
-                try:
-                    client.close()
-                except Exception:
-                    pass
-                client = None
-            last_error: BaseException | None = None
-            for attempt in range(1, 5):
-                try:
-                    fresh = paramiko.SSHClient()
-                    fresh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                    fresh.connect(
-                        "127.0.0.1",
-                        port=ssh_port,
-                        username=server_exec.SERVER_USER,
-                        password=os.environ.get("DGX_SERVER_PASSWORD") or server_exec.SERVER_PASSWORD,
-                        timeout=30,
-                        banner_timeout=45,
-                        auth_timeout=30,
-                        look_for_keys=False,
-                        allow_agent=False,
-                    )
-                    transport = fresh.get_transport()
-                    if transport is None:
-                        raise RuntimeError("SSH transport was not established")
-                    transport.set_keepalive(15)
-                    client = fresh
-                    sftp = paramiko.SFTPClient.from_transport(
-                        transport,
-                        window_size=128 * 1024 * 1024,
-                        max_packet_size=16 * 1024 * 1024,
-                    )
-                    return
-                except RETRYABLE_SFTP_ERRORS as exc:
-                    last_error = exc
-                    time.sleep(min(2 * attempt, 8))
-            raise RuntimeError(f"failed to establish SSH/SFTP session after retries: {last_error}") from last_error
+                    tunnel.wait(timeout=4)
+                except subprocess.TimeoutExpired:
+                    tunnel.kill()
+            ssh_port = server_exec.free_port()
+            tunnel = server_exec.open_tunnel(ssh_port)
+            time.sleep(0.8)
+            if tunnel.poll() is not None:
+                _out, err = tunnel.communicate(timeout=2)
+                raise RuntimeError(f"failed to restart SSH tunnel: {err}")
+            wait_local_port(ssh_port, timeout=30.0)
+            if session is not None:
+                session.port = ssh_port
 
-        def require_sftp() -> paramiko.SFTPClient:
-            if sftp is None:
-                reconnect_ssh()
-            assert sftp is not None
-            return sftp
+        def on_remote_retry(label: str, attempt: int, attempts: int, exc: BaseException) -> None:
+            print(f"warning: remote {label} failed on attempt {attempt}/{attempts}: {exc}", file=sys.stderr)
+            try:
+                protocol.update_status(job_dir, message=f"remote {label} retry {attempt}/{attempts}: {exc}")
+            except Exception:
+                pass
 
-        def require_client() -> paramiko.SSHClient:
-            if client is None:
-                reconnect_ssh()
-            assert client is not None
-            return client
+        session = remote_session.RemoteSession(
+            host="127.0.0.1",
+            port=ssh_port,
+            username=server_exec.SERVER_USER,
+            password=os.environ.get("DGX_SERVER_PASSWORD") or server_exec.SERVER_PASSWORD,
+            attempts=4,
+            on_retry=on_remote_retry,
+        )
 
-        def sftp_call(label: str, operation: Callable[[paramiko.SFTPClient], Any], attempts: int = 4) -> Any:
+        def connect_with_tunnel_restarts(attempts: int = 3) -> None:
             last_error: BaseException | None = None
             for attempt in range(1, attempts + 1):
                 try:
-                    return operation(require_sftp())
-                except RETRYABLE_SFTP_ERRORS as exc:
+                    assert session is not None
+                    session.reconnect()
+                    return
+                except RuntimeError as exc:
                     last_error = exc
-                    print(f"warning: SFTP {label} failed on attempt {attempt}/{attempts}: {exc}", file=sys.stderr)
-                    protocol.update_status(
-                        job_dir,
-                        message=f"SFTP {label} retry {attempt}/{attempts}: {exc}",
-                    )
-                    reconnect_ssh()
-                    time.sleep(min(2 * attempt, 8))
-            raise RuntimeError(f"SFTP {label} failed after {attempts} attempts: {last_error}") from last_error
+                    if attempt >= attempts or not remote_session.is_retryable_text(str(exc)):
+                        raise
+                    on_remote_retry("tunnel restart", attempt, attempts, exc)
+                    restart_tunnel()
+            raise RuntimeError(f"failed to connect after tunnel restarts: {last_error}") from last_error
 
-        reconnect_ssh()
+        def require_sftp() -> paramiko.SFTPClient:
+            assert session is not None
+            return session.require_sftp()
+
+        def require_client() -> paramiko.SSHClient:
+            assert session is not None
+            return session.require_client()
+
+        def sftp_call(label: str, operation: Callable[[paramiko.SFTPClient], Any], attempts: int = 4) -> Any:
+            assert session is not None
+            last_error: BaseException | None = None
+            for tunnel_attempt in range(1, 3):
+                try:
+                    return session.sftp_call(label, operation, attempts=attempts)
+                except RuntimeError as exc:
+                    last_error = exc
+                    if tunnel_attempt >= 2 or not remote_session.is_retryable_text(str(exc)):
+                        raise
+                    on_remote_retry(f"{label} tunnel restart", tunnel_attempt, 2, exc)
+                    restart_tunnel()
+                    connect_with_tunnel_restarts()
+            raise RuntimeError(f"SFTP {label} failed after tunnel restart: {last_error}") from last_error
+
+        connect_with_tunnel_restarts()
 
         remote_job_dir = f"{REMOTE_JOB_ROOT}/{job_id}"
         remote_prompt = f"{REMOTE_BASE}/workflows/runs/{job_id}_remote_sampling_api.json"
@@ -1035,7 +1033,17 @@ def main() -> int:
         remote_pid = ensure_remote_comfy(require_client(), args.remote_port, job_id)
         protocol.update_status(job_dir, stage="queued", message="Remote prompt submitted", overall_percent=35)
         emit_progress("queued", 35)
-        submit_remote_prompt(require_client(), require_sftp(), prompt, job_id, remote_job_dir, job_dir, args.remote_port, args.timeout)
+        submit_remote_prompt(
+            require_client(),
+            require_sftp(),
+            prompt,
+            job_id,
+            remote_job_dir,
+            job_dir,
+            args.remote_port,
+            args.timeout,
+            sftp_call=sftp_call,
+        )
 
         protocol.update_status(job_dir, stage="download", message="Downloading output latent", overall_percent=90)
         emit_progress("download", 90)
@@ -1058,10 +1066,10 @@ def main() -> int:
         print(json.dumps({"ok": True, "job_id": job_id, "remote_job_dir": remote_job_dir}, ensure_ascii=False))
         return 0
     except Exception as exc:
-        if sftp is not None and remote_job_dir is not None:
+        if session is not None and remote_job_dir is not None:
             try:
-                merge_remote_status_into_local(sftp, remote_job_dir, job_dir)
-                append_remote_events(sftp, remote_job_dir, job_dir)
+                session.sftp_call("merge remote status after failure", lambda active_sftp: merge_remote_status_into_local(active_sftp, remote_job_dir, job_dir), attempts=2)
+                session.sftp_call("append remote events after failure", lambda active_sftp: append_remote_events(active_sftp, remote_job_dir, job_dir), attempts=2)
             except Exception:
                 pass
         current = protocol.read_status(job_dir)
@@ -1088,26 +1096,19 @@ def main() -> int:
             pass
         raise
     finally:
-        if remote_pid is not None and not args.keep_remote and client is not None:
+        cleanup_client = session.client if session is not None else None
+        if remote_pid is not None and not args.keep_remote and cleanup_client is not None:
             try:
-                stop_remote_pid(client, remote_pid)
+                stop_remote_pid(cleanup_client, remote_pid)
             except Exception as cleanup_exc:
                 print(f"warning: failed to stop remote pid {remote_pid}: {cleanup_exc}", file=sys.stderr)
-        if remote_lock is not None and client is not None:
+        if remote_lock is not None and cleanup_client is not None:
             try:
-                release_remote_service_lock(client, remote_lock)
+                release_remote_service_lock(cleanup_client, remote_lock)
             except Exception as cleanup_exc:
                 print(f"warning: failed to release remote lock {remote_lock}: {cleanup_exc}", file=sys.stderr)
-        if sftp is not None:
-            try:
-                sftp.close()
-            except Exception:
-                pass
-        if client is not None:
-            try:
-                client.close()
-            except Exception:
-                pass
+        if session is not None:
+            session.close()
         if tunnel.poll() is None:
             tunnel.terminate()
             try:

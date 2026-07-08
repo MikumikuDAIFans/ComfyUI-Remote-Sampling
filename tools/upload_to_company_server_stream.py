@@ -124,23 +124,12 @@ def upload_file(client: paramiko.SSHClient, local: Path, remote: str) -> None:
         print(f"skip {remote}: already complete ({size} bytes)", flush=True)
         return
     if final_size is not None and final_size != size:
-        if final_size < size:
-            tmp_remote = remote + ".uploading"
-            tmp_size = remote_size(client, tmp_remote)
-            if tmp_size is None or tmp_size < final_size:
-                print(
-                    f"resume candidate {remote}: moving partial final file to {tmp_remote} ({final_size}/{size} bytes)",
-                    flush=True,
-                )
-                run_text(client, f"mv -f -- {shlex.quote(remote)} {shlex.quote(tmp_remote)}")
-            else:
-                print(
-                    f"remove stale partial final file {remote}; newer upload temp exists ({tmp_size}/{size} bytes)",
-                    flush=True,
-                )
-                run_text(client, f"rm -f -- {shlex.quote(remote)}")
-        else:
-            raise RuntimeError(f"remote file exists with unexpected size: {remote} ({final_size} != {size})")
+        print(
+            f"remove stale final file {remote}; size mismatch ({final_size}/{size} bytes). "
+            "Only .uploading files are resumed.",
+            flush=True,
+        )
+        run_text(client, f"rm -f -- {shlex.quote(remote)}")
 
     tmp_remote = remote + ".uploading"
     offset = remote_size(client, tmp_remote) or 0
